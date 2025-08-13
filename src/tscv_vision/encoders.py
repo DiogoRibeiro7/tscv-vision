@@ -1,5 +1,4 @@
 from __future__ import annotations
-import math
 from typing import Literal
 import numpy as np
 
@@ -117,3 +116,34 @@ def spectrogram(
     mag = np.abs(fft).T  # (F,T)
     mag = mag / (np.max(mag) + 1e-12)
     return mag
+
+
+def sliding_window_encode(
+    x: Array,
+    window_size: int,
+    step: int,
+    encoder: Callable[[Array], Array],
+    **kwargs,
+) -> list[Array]:
+    """Apply an encoder to sliding windows of a 1D time series.
+
+    Args:
+        x: 1D array.
+        window_size: Number of samples per window.
+        step: Step size between windows.
+        encoder: Callable that maps 1D array -> 2D image.
+        **kwargs: Passed to encoder.
+
+    Returns:
+        List of encoded 2D arrays.
+    """
+    x = np.asarray(x, dtype=float)
+    n = len(x)
+    if n < window_size:
+        raise ValueError("Time series shorter than window size")
+    out = []
+    for start in range(0, n - window_size + 1, step):
+        segment = x[start : start + window_size]
+        img = encoder(segment, **kwargs)
+        out.append(img)
+    return out

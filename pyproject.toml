@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "tscv-vision"
+version = "0.1.0"
+description = "Computer-vision feature engineering for 1D time series (NumPy-first)."
+authors = ["Diogo <diogo@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "tscv_vision", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+numpy = ">=1.24"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7"
+ruff = ">=0.4"
+mypy = ">=1.10"
+typing-extensions = ">=4.8"
+
+[tool.poetry.scripts]
+tscv-features = "tscv_vision.cli:main"
+
+[build-system]
+requires = ["poetry-core>=1.7.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+select = ["E","F","I","W","B","UP","NPY"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = true
+warn_unused_ignores = true

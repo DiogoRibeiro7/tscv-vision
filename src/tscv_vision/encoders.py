@@ -1,8 +1,12 @@
 from __future__ import annotations
-from typing import Literal
-import numpy as np
 
-Array = np.ndarray
+import math
+from typing import Callable, Literal, cast
+
+import numpy as np
+from numpy.typing import NDArray
+
+Array = NDArray[np.float64]
 
 
 def _minmax_scale(x: Array) -> Array:
@@ -37,19 +41,14 @@ def gaf(x: Array, method: Literal["summation", "difference"] = "summation") -> A
     x = _minmax_scale(x)
     # Polar encoding
     phi = np.arccos(np.clip(x, -1.0, 1.0))  # angle
-    # Time radii scaled to [0,1]
-    n = x.shape[0]
-    r = np.linspace(0.0, 1.0, n)
-
     # Outer sums/diffs of angles
     phi_i = phi[:, None]
     phi_j = phi[None, :]
     if method == "summation":
-        return np.cos(phi_i + phi_j)
-    elif method == "difference":
-        return np.sin(phi_i - phi_j)
-    else:
-        raise ValueError("method must be 'summation' or 'difference'")
+        return cast(Array, np.cos(phi_i + phi_j))
+    if method == "difference":
+        return cast(Array, np.sin(phi_i - phi_j))
+    raise ValueError("method must be 'summation' or 'difference'")
 
 
 def recurrence_plot(
@@ -59,8 +58,9 @@ def recurrence_plot(
 
     Args:
         x: 1D series (N,).
-        metric: distance metric.
-        eps: optional threshold; if provided returns binary RP (0/1), else distances normalized to [0,1].
+        metric: Distance metric.
+        eps: Optional threshold; if set returns binary RP (0/1), else
+            distances normalized to [0, 1].
     Returns:
         (N, N) array RP.
     """
@@ -75,8 +75,8 @@ def recurrence_plot(
         raise ValueError("Unsupported metric")
     dist = dist / (np.nanmax(dist) + 1e-12)
     if eps is None:
-        return 1.0 - dist  # similarity map
-    return (dist <= eps).astype(float)
+        return cast(Array, 1.0 - dist)  # similarity map
+    return cast(Array, (dist <= eps).astype(float))
 
 
 def spectrogram(
@@ -84,19 +84,24 @@ def spectrogram(
 ) -> Array:
     """Very small STFT-based magnitude spectrogram using NumPy only.
 
+    Pads the signal with zeros so all samples are covered by a window.
+
     Args:
-        x: 1D array (N,)
-        win: window length (>=8)
-        hop: hop length (defaults to win//4)
-        window: window type ("hann" or "rect")
+        x: 1D array ``(N,)``.
+        win: Window length (``>=8``).
+        hop: Hop length (defaults to ``win//4``).
+        window: Window type (``"hann"`` or ``"rect"``).
     Returns:
-        (F, T) magnitude spectrogram scaled to [0,1]
+        Magnitude spectrogram ``(win//2 + 1, n_frames)`` scaled to ``[0, 1]`` where
+        ``n_frames = ceil((N - win) / hop) + 1``.
     """
     x = np.asarray(x, dtype=float)
     if hop is None:
         hop = max(1, win // 4)
     if win < 8:
         raise ValueError("win must be >= 8")
+    if len(x) < win:
+        raise ValueError("len(x) must be >= win")
     if window == "hann":
         w = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(win) / win)
     elif window == "rect":
@@ -104,7 +109,11 @@ def spectrogram(
     else:
         raise ValueError("Unsupported window")
 
-    n_frames = 1 + max(0, (len(x) - win) // hop)
+    n_frames = 1 + math.ceil((len(x) - win) / hop)
+    total_len = (n_frames - 1) * hop + win
+    if len(x) < total_len:
+        x = np.pad(x, (0, total_len - len(x)))
+
     frames = np.lib.stride_tricks.as_strided(
         x,
         shape=(n_frames, win),
@@ -115,35 +124,40 @@ def spectrogram(
     fft = np.fft.rfft(frames, n=win, axis=1)
     mag = np.abs(fft).T  # (F,T)
     mag = mag / (np.max(mag) + 1e-12)
-    return mag
+    return cast(Array, mag)
 
 
-def sliding_window_encode(
-    x: Array,
-    window_size: int,
-    step: int,
-    encoder: Callable[[Array], Array],
-    **kwargs,
-) -> list[Array]:
-    """Apply an encoder to sliding windows of a 1D time series.
+# ---------------------------------------------------------------------------
+# Encoder registry
 
-    Args:
-        x: 1D array.
-        window_size: Number of samples per window.
-        step: Step size between windows.
-        encoder: Callable that maps 1D array -> 2D image.
-        **kwargs: Passed to encoder.
+ENCODER_REGISTRY: dict[str, Callable[..., Array]] = {
+    "gaf": gaf,
+    "gadf": lambda x, **k: gaf(x, method="difference"),
+    "rp": recurrence_plot,
+    "spec": spectrogram,
+}
 
-    Returns:
-        List of encoded 2D arrays.
+
+def register_encoder(name: str, func: Callable[..., Array]) -> None:
+    """Register a new encoder function.
+
+    Parameters
+    ----------
+    name:
+        Unique encoder identifier.
+    func:
+        Callable with signature ``(x: Array, **kwargs) -> Array``.
     """
-    x = np.asarray(x, dtype=float)
-    n = len(x)
-    if n < window_size:
-        raise ValueError("Time series shorter than window size")
-    out = []
-    for start in range(0, n - window_size + 1, step):
-        segment = x[start : start + window_size]
-        img = encoder(segment, **kwargs)
-        out.append(img)
-    return out
+
+    if name in ENCODER_REGISTRY:
+        raise ValueError(f"Encoder '{name}' already registered")
+    ENCODER_REGISTRY[name] = func
+
+
+__all__ = [
+    "gaf",
+    "recurrence_plot",
+    "spectrogram",
+    "ENCODER_REGISTRY",
+    "register_encoder",
+]

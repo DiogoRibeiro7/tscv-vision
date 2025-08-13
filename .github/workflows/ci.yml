@@ -17,9 +17,20 @@ jobs:
         run: |
           poetry env use 3.11
           poetry install
-      - name: Lint
-        run: |
-          poetry run ruff check .
-          poetry run mypy src
+      - name: Pre-commit
+        run: poetry run pre-commit run --all-files
       - name: Tests
-        run: poetry run pytest -q
+        run: poetry run pytest --cov=src --cov-report=xml --cov-report=term
+      - name: CLI smoke
+        run: |
+          python - <<'PY'
+import numpy as np
+np.save('series.npy', np.sin(np.linspace(0, 4*np.pi, 128)))
+PY
+          poetry run tscv-features --encoder gaf --input series.npy --output out.npz
+          poetry run tscv-features --encoder spec --sliding --win-len 64 --hop 32 --input series.npy --output out_sliding.npz
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage.xml
+          fail_ci_if_error: true

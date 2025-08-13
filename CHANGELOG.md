@@ -1,0 +1,32 @@
+# Changelog
+
+## [0.5.0] - 2025-08-13
+- Provide scikit-learn, PyTorch and TensorFlow integration helpers
+- Allow exporting feature arrays as ONNX ``TensorProto`` objects
+- Save metadata about encoders, features and sliding windows in outputs
+
+## [0.4.0] - 2025-08-13
+- Support memory-mapped ``.npy`` files and chunked iteration for ``.npz``/Parquet
+- Add multiprocessing utilities and ``--parallel`` CLI flag
+- Introduce Arrow/Parquet/HDF5 interoperability helpers
+
+## [0.3.0] - 2025-08-13
+- Add fusion utilities for combining outputs from multiple encoders
+- Introduce temporal aggregation functions for sliding features
+- Provide encoder registry with user-defined registration API
+- Expand CLI with multi-encoder fusion and aggregation options
+
+## [0.2.0] - 2025-08-13
+- Add multichannel encoding with fusion strategies
+- Introduce WindowedDataset streaming API and feature registry
+- Support selective feature extraction via CLI `--features`
+
+## [0.1.1] - 2025-08-13
+- Add example notebooks and CLI walkthrough
+- Integrate Codecov and CLI smoke tests in CI
+- Fix deprecation warning by moving ruff settings under `[tool.ruff.lint]`
+
+## [0.1.0] - 2025-08-13
+- Initial pre-release with GAF/GADF, recurrence plot and spectrogram encoders
+- Feature extractors for intensity stats, histograms, gradients and LBP
+- Sliding-window batch pipeline and CLI with image/metadata saving

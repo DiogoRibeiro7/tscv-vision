@@ -1,7 +1,17 @@
-"""Top-level package for tscv-vision.
+"""Top-level package for tscv-vision."""
 
-Exports the main encoders and feature extractors.
-"""
-from . import encoders, features
+from . import aggregation, encoders, features, fusion, io, ml_integration, parallel
+from .dataset import WindowedDataset
 
-__all__ = ["encoders", "features"]
+__all__ = [
+    "aggregation",
+    "encoders",
+    "features",
+    "fusion",
+    "io",
+    "ml_integration",
+    "parallel",
+    "WindowedDataset",
+]
+
+__version__ = "0.5.0"

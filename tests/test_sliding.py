@@ -34,19 +34,18 @@ def test_sliding_windows_validations() -> None:
         sliding_windows(np.zeros((2, 2, 2)), size=4)
     with pytest.raises(ValueError):
         sliding_windows(x, size=1)
+    with pytest.raises(ValueError):
+        sliding_windows(x, size=16)
     view = sliding_windows(x, size=4)
     assert view.shape[0] == 3
     multi = sliding_windows(np.stack([x, x], axis=1), size=4)
     assert multi.shape == (3, 4, 2)
-    empty = sliding_windows(x, size=16)
-    assert empty.shape == (1, 16)
 
 
-def test_encode_sliding_empty_and_spec() -> None:
+def test_encode_sliding_invalid_and_spec() -> None:
     x = np.linspace(0.0, 2 * np.pi, 64)
-    imgs, starts = encode_sliding(x[:10], size=20)
-    assert imgs.shape == (1, 20, 20)
-    assert starts.size == 1
+    with pytest.raises(ValueError):
+        encode_sliding(x[:10], size=20)
     imgs, starts = encode_sliding(x, encoder="spec", size=32, hop=16)
     assert imgs.ndim == 3
     assert starts.shape[0] == imgs.shape[0]

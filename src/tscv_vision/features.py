@@ -21,14 +21,19 @@ def _pad_reflect(img: Array, k: int) -> Array:
 
 
 def _conv2(img: Array, kernel: Array) -> Array:
-    k = kernel.shape[0] // 2
+    k_h, k_w = kernel.shape
+    if k_h != k_w or k_h % 2 == 0:
+        raise ValueError("kernel must be square with odd size")
+    k = k_h // 2
     p = _pad_reflect(img, k)
-    out = np.zeros_like(img, dtype=float)
-    for i in range(out.shape[0]):
-        for j in range(out.shape[1]):
-            region = p[i : i + 2 * k + 1, j : j + 2 * k + 1]
-            out[i, j] = float(np.sum(region * kernel))
-    return out
+    H, W = img.shape
+    view = np.lib.stride_tricks.as_strided(
+        p,
+        shape=(H, W, k_h, k_w),
+        strides=(p.strides[0], p.strides[1], p.strides[0], p.strides[1]),
+        writeable=False,
+    )
+    return np.tensordot(view, kernel, axes=((2, 3), (0, 1)))
 
 
 def intensity_stats(img: Array) -> Array:

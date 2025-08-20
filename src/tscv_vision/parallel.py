@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable
 from typing import TypeVar
 
 T = TypeVar("T")
 R = TypeVar("R")
 
 
-def map_parallel(func: Callable[[T], R], data: Sequence[T], workers: int | None = None) -> list[R]:
+def map_parallel(
+    func: Callable[[T], R], data: Iterable[T], workers: int | None = None
+) -> list[R]:
     """Apply ``func`` to ``data`` in parallel.
 
     Parameters
@@ -17,7 +19,7 @@ def map_parallel(func: Callable[[T], R], data: Sequence[T], workers: int | None 
     func:
         Callable executed on each element of ``data``.
     data:
-        Sequence of inputs.
+        Iterable of inputs.
     workers:
         Number of worker processes. If ``None`` or ``1`` the call is executed
         sequentially.

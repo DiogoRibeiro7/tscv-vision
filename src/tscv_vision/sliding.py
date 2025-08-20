@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from functools import partial
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -68,7 +68,7 @@ def sliding_windows(
     x:
         Input 1D or 2D series of length ``N``.
     size:
-        Window length ``>=2``.
+        Window length ``>=2`` and ``<= N``.
     hop:
         Step between starts (defaults to ``size//2``).
     copy:
@@ -88,6 +88,8 @@ def sliding_windows(
     if hop is None:
         hop = max(1, size // 2)
     n = x.shape[0]
+    if size > n:
+        raise ValueError("size cannot exceed length of x")
     n_win = 1 + max(0, (n - size) // hop)
     if x.ndim == 1:
         if n_win <= 0:
@@ -160,7 +162,7 @@ def encode_sliding(
         channel_fusion=channel_fusion,
     )
 
-    imgs = map_parallel(func, list(win_view), workers)
+    imgs = map_parallel(func, cast(Iterable[Array], win_view), workers)
 
     if encoder == "spec":
         maxF = max(im.shape[0] for im in imgs)

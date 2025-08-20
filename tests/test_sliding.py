@@ -51,6 +51,17 @@ def test_encode_sliding_invalid_and_spec() -> None:
     assert starts.shape[0] == imgs.shape[0]
 
 
+def test_encode_sliding_lazy() -> None:
+    x = np.sin(np.linspace(0.0, 4 * np.pi, 128))
+    eager, starts = encode_sliding(x, size=32, hop=16)
+    gen = encode_sliding(x, size=32, hop=16, lazy=True)
+    assert not isinstance(gen, np.ndarray)
+    collected = list(gen)
+    imgs_lazy, starts_lazy = zip(*collected)
+    np.testing.assert_allclose(np.stack(imgs_lazy), eager)
+    np.testing.assert_array_equal(np.array(starts_lazy), starts)
+
+
 def test_encode_sliding_multichannel() -> None:
     t = np.linspace(0.0, 2 * np.pi, 128)
     x = np.column_stack([np.sin(t), np.cos(t)])
@@ -68,4 +79,16 @@ def test_encode_sliding_multichannel() -> None:
         spec_hop=16,
     )
     assert imgs_concat.shape[2] == 6
+
+
+def test_features_for_sliding_lazy() -> None:
+    t = np.linspace(0.0, 2 * np.pi, 128)
+    x = np.sin(t)
+    eager_feats, starts = features_for_sliding(x, size=32, hop=32)
+    gen = features_for_sliding(x, size=32, hop=32, lazy=True)
+    assert not isinstance(gen, np.ndarray)
+    collected = list(gen)
+    feats_lazy, starts_lazy = zip(*collected)
+    np.testing.assert_allclose(np.vstack(feats_lazy), eager_feats)
+    np.testing.assert_array_equal(np.array(starts_lazy), starts)
 

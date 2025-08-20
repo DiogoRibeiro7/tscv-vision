@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Callable
+from collections.abc import Iterable, Iterator
+from typing import Callable, Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -205,9 +205,35 @@ def extract_feature_vector(
     return np.concatenate(parts, dtype=float)
 
 
+@overload
 def extract_batch(
-    images: Array, bins: int = 32, selected: Iterable[str] | None = None
+    images: Array,
+    bins: int = 32,
+    selected: Iterable[str] | None = None,
+    *,
+    lazy: Literal[False] = False,
 ) -> Array:
+    ...
+
+
+@overload
+def extract_batch(
+    images: Array,
+    bins: int = 32,
+    selected: Iterable[str] | None = None,
+    *,
+    lazy: Literal[True],
+) -> Iterator[Array]:
+    ...
+
+
+def extract_batch(
+    images: Array,
+    bins: int = 32,
+    selected: Iterable[str] | None = None,
+    *,
+    lazy: bool = False,
+) -> Array | Iterator[Array]:
     """Extract feature vectors for a batch of images.
 
     Parameters
@@ -216,17 +242,39 @@ def extract_batch(
         Array of shape ``(N, H, W)`` or ``(N, H, W, C)``.
     bins:
         Histogram bins for :func:`extract_feature_vector`.
+    selected:
+        Feature names to compute. ``None`` uses all registered features.
+    lazy:
+        If ``True`` yield feature vectors one by one instead of allocating a
+        full ``(N, D)`` matrix. This reduces peak memory for very large
+        batches at the cost of increased iteration overhead.
 
     Returns
     -------
-    Array
-        Matrix of shape ``(N, D)`` where ``D`` is feature dimension.
+    Array or Iterator[Array]
+        Matrix of shape ``(N, D)`` or an iterator over feature vectors when
+        ``lazy`` is ``True``.
     """
 
     if images.ndim not in {3, 4}:
         raise ValueError("images must have shape (N, H, W[, C])")
-    feats = [extract_feature_vector(im, bins=bins, selected=selected) for im in images]
-    return np.vstack(feats) if feats else np.zeros((0, 0), dtype=float)
+
+    if lazy:
+        def gen() -> Iterator[Array]:
+            for im in images:
+                yield extract_feature_vector(im, bins=bins, selected=selected)
+
+        return gen()
+
+    n = images.shape[0]
+    if n == 0:
+        return np.zeros((0, 0), dtype=float)
+    first = extract_feature_vector(images[0], bins=bins, selected=selected)
+    out = np.empty((n, first.size), dtype=float)
+    out[0] = first
+    for i in range(1, n):
+        out[i] = extract_feature_vector(images[i], bins=bins, selected=selected)
+    return out
 
 
 __all__ = [

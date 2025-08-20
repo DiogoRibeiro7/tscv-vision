@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from pytest import CaptureFixture, MonkeyPatch
 
 from tscv_vision import cli
@@ -176,3 +177,105 @@ def test_cli_parallel(
     assert "Saved features matrix" in out
     data = np.load(out_path)
     assert data["features"].shape[0] > 0
+
+
+def test_cli_dry_run(
+    tmp_path: Path, monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]
+) -> None:
+    x = np.sin(np.linspace(0.0, 2 * np.pi, 64))
+    in_path = tmp_path / "x.npy"
+    np.save(in_path, x)
+    out_path = tmp_path / "out.npz"
+    args = [
+        "tscv-features",
+        "--encoders",
+        "gaf",
+        "--input",
+        str(in_path),
+        "--output",
+        str(out_path),
+        "--dry-run",
+    ]
+    monkeypatch.setattr(sys, "argv", args)
+    cli.main()
+    captured = capsys.readouterr()
+    assert "[DRY RUN]" in captured.out
+    assert not out_path.exists()
+
+
+def test_cli_batch_processing(
+    tmp_path: Path, monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]
+) -> None:
+    x1 = np.sin(np.linspace(0.0, 2 * np.pi, 64))
+    x2 = np.cos(np.linspace(0.0, 2 * np.pi, 64))
+    in1 = tmp_path / "a.npy"
+    in2 = tmp_path / "b.npy"
+    np.save(in1, x1)
+    np.save(in2, x2)
+    out_dir = tmp_path / "out"
+    args = [
+        "tscv-features",
+        "--encoders",
+        "gaf",
+        "--input",
+        str(in1),
+        str(in2),
+        "--output",
+        str(out_dir),
+    ]
+    monkeypatch.setattr(sys, "argv", args)
+    cli.main()
+    captured = capsys.readouterr()
+    assert "Saved features" in captured.out
+    assert (out_dir / "a.npz").exists()
+    assert (out_dir / "b.npz").exists()
+
+
+def test_cli_config_json(
+    tmp_path: Path, monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]
+) -> None:
+    x = np.sin(np.linspace(0.0, 2 * np.pi, 64))
+    in_path = tmp_path / "x.npy"
+    np.save(in_path, x)
+    out_path = tmp_path / "out.npz"
+    cfg = {"encoders": "gaf", "bins": 8, "features": "intensity"}
+    cfg_path = tmp_path / "cfg.json"
+    cfg_path.write_text(json.dumps(cfg))
+    args = [
+        "tscv-features",
+        "--config",
+        str(cfg_path),
+        "--input",
+        str(in_path),
+        "--output",
+        str(out_path),
+    ]
+    monkeypatch.setattr(sys, "argv", args)
+    cli.main()
+    captured = capsys.readouterr()
+    assert "Saved features" in captured.out
+    data = np.load(out_path)
+    assert data["features"].shape[0] == 6
+
+
+def test_cli_invalid_bins(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    x = np.sin(np.linspace(0.0, 2 * np.pi, 64))
+    in_path = tmp_path / "x.npy"
+    np.save(in_path, x)
+    out_path = tmp_path / "out.npz"
+    args = [
+        "tscv-features",
+        "--encoders",
+        "gaf",
+        "--input",
+        str(in_path),
+        "--output",
+        str(out_path),
+        "--bins",
+        "0",
+    ]
+    monkeypatch.setattr(sys, "argv", args)
+    with pytest.raises(SystemExit):
+        cli.main()

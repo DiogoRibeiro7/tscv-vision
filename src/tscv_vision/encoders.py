@@ -9,35 +9,88 @@ from numpy.typing import NDArray
 Array = NDArray[np.float64]
 
 
-def _minmax_scale(x: Array) -> Array:
-    """Scale to [-1, 1] robustly. Adds small eps to avoid zero-division.
+def _validate_series(x: Array) -> Array:
+    """Return ``x`` as a 1D ``float64`` array after validation.
 
-    Args:
-        x: 1D array-like time series.
-    Returns:
-        Scaled array in [-1, 1].
+    Parameters
+    ----------
+    x:
+        Input array.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` is not 1D, empty or contains NaN/inf values.
     """
+
     x = np.asarray(x, dtype=float)
-    xmin, xmax = np.nanmin(x), np.nanmax(x)
-    if not np.isfinite(xmin) or not np.isfinite(xmax):
-        raise ValueError("Input contains non-finite values.")
-    if xmax == xmin:
+    if x.ndim != 1:
+        raise ValueError("x must be a 1D array")
+    if x.size == 0:
+        raise ValueError("x cannot be empty")
+    if not np.all(np.isfinite(x)):
+        raise ValueError("x contains NaN or infinite values")
+    return x
+
+
+def _minmax_scale(x: Array) -> Array:
+    """Scale a validated series to ``[-1, 1]``.
+
+    Adds a small epsilon to avoid zero division.
+
+    Parameters
+    ----------
+    x:
+        1D time series.
+
+    Returns
+    -------
+    ndarray
+        Scaled array in ``[-1, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If the dynamic range of ``x`` is not finite.
+    """
+
+    x = _validate_series(x)
+    xmin, xmax = x.min(), x.max()
+    span = xmax - xmin
+    if not np.isfinite(span):
+        raise ValueError("Input range is too large")
+    if span == 0:
         return np.zeros_like(x)
-    x01 = (x - xmin) / (xmax - xmin)
-    return x01 * 2.0 - 1.0
+    x01 = (x - xmin) / span
+    return cast(Array, x01 * 2.0 - 1.0)
 
 
 def gaf(x: Array, method: Literal["summation", "difference"] = "summation") -> Array:
     """Gramian Angular Field (GAF) encoding.
 
-    Maps a 1D series to a Gramian image using polar transform and cosine rule.
+    Maps a 1D series to a Gramian image using a polar transform and the
+    cosine rule.
 
-    Args:
-        x: 1D time series (N,).
-        method: "summation" (GASF) or "difference" (GADF).
-    Returns:
-        (N, N) image with values in [-1, 1].
+    Parameters
+    ----------
+    x:
+        1D time series ``(N,)``.
+    method:
+        ``"summation"`` (GASF) or ``"difference"`` (GADF).
+
+    Returns
+    -------
+    ndarray
+        ``(N, N)`` image with values in ``[-1, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` is empty, not 1D or contains NaN/inf values.
+    ValueError
+        If ``method`` is not one of ``{"summation", "difference"}``.
     """
+
     x = _minmax_scale(x)
     # Polar encoding
     phi = np.arccos(np.clip(x, -1.0, 1.0))  # angle
@@ -56,26 +109,47 @@ def recurrence_plot(
 ) -> Array:
     """Binary/real-valued recurrence plot.
 
-    Args:
-        x: 1D series (N,).
-        metric: Distance metric.
-        eps: Optional threshold; if set returns binary RP (0/1), else
-            distances normalized to [0, 1].
-    Returns:
-        (N, N) array RP.
+    Parameters
+    ----------
+    x:
+        1D time series ``(N,)``.
+    metric:
+        Distance metric to use.
+    eps:
+        Optional threshold; if set, returns a binary RP (0/1), otherwise
+        distances normalised to ``[0, 1]``.
+
+    Returns
+    -------
+    ndarray
+        ``(N, N)`` recurrence matrix.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` is empty, not 1D or contains NaN/inf values.
+    ValueError
+        If ``metric`` is not ``"euclidean"`` or ``"manhattan"``.
+    ValueError
+        If ``eps`` is provided and is not finite or outside ``[0, 1]``.
     """
-    x = np.asarray(x, dtype=float)
+
+    x = _validate_series(x)
     x = x.reshape(-1, 1)
     diffs = x - x.T  # (N,N)
     if metric == "euclidean":
-        dist = np.sqrt(diffs * diffs)
+        dist = np.abs(diffs)
     elif metric == "manhattan":
         dist = np.abs(diffs)
     else:
-        raise ValueError("Unsupported metric")
+        raise ValueError("metric must be 'euclidean' or 'manhattan'")
+    if not np.all(np.isfinite(dist)):
+        raise ValueError("Input range is too large")
     dist = dist / (np.nanmax(dist) + 1e-12)
     if eps is None:
         return cast(Array, 1.0 - dist)  # similarity map
+    if not np.isfinite(eps) or not 0.0 <= eps <= 1.0:
+        raise ValueError("eps must be in [0, 1]")
     return cast(Array, (dist <= eps).astype(float))
 
 
@@ -86,20 +160,45 @@ def spectrogram(
 
     Pads the signal with zeros so all samples are covered by a window.
 
-    Args:
-        x: 1D array ``(N,)``.
-        win: Window length (``>=8``).
-        hop: Hop length (defaults to ``win//4``).
-        window: Window type (``"hann"`` or ``"rect"``).
-    Returns:
+    Parameters
+    ----------
+    x:
+        1D array ``(N,)``.
+    win:
+        Window length (``>=8``).
+    hop:
+        Hop length (defaults to ``win//4``).
+    window:
+        Window type (``"hann"`` or ``"rect"``).
+
+    Returns
+    -------
+    ndarray
         Magnitude spectrogram ``(win//2 + 1, n_frames)`` scaled to ``[0, 1]`` where
         ``n_frames = ceil((N - win) / hop) + 1``.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` is empty, not 1D or contains NaN/inf values.
+    ValueError
+        If ``win < 8``.
+    ValueError
+        If ``hop`` is non-positive or greater than ``win``.
+    ValueError
+        If ``len(x) < win``.
+    ValueError
+        If ``window`` is not ``'hann'`` or ``'rect'``.
     """
-    x = np.asarray(x, dtype=float)
+    x = _validate_series(x)
     if hop is None:
         hop = max(1, win // 4)
     if win < 8:
         raise ValueError("win must be >= 8")
+    if hop <= 0:
+        raise ValueError("hop must be > 0")
+    if hop > win:
+        raise ValueError("hop must be <= win")
     if len(x) < win:
         raise ValueError("len(x) must be >= win")
     if window == "hann":
@@ -107,7 +206,7 @@ def spectrogram(
     elif window == "rect":
         w = np.ones(win)
     else:
-        raise ValueError("Unsupported window")
+        raise ValueError("window must be 'hann' or 'rect'")
 
     n_frames = 1 + math.ceil((len(x) - win) / hop)
     total_len = (n_frames - 1) * hop + win
@@ -123,6 +222,8 @@ def spectrogram(
     frames = frames * w[None, :]
     fft = np.fft.rfft(frames, n=win, axis=1)
     mag = np.abs(fft).T  # (F,T)
+    if not np.all(np.isfinite(mag)):
+        raise ValueError("Input range is too large")
     mag = mag / (np.max(mag) + 1e-12)
     return cast(Array, mag)
 

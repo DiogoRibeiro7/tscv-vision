@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tscv-feature-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tscv-feature-service
+  template:
+    metadata:
+      labels:
+        app: tscv-feature-service
+    spec:
+      containers:
+        - name: service
+          image: tscv-vision:latest
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tscv-feature-service
+spec:
+  selector:
+    app: tscv-feature-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000

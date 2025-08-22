@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.10.0] - 2025-08-13
+- Add domain-specific modules for finance, healthcare, IoT, audio, astronomy,
+  climate and manufacturing, each with toy pre-trained models
+
+## [0.9.0] - 2025-08-13
+- Introduce research utilities for experiment tracking, fairness reports and
+  differential privacy
+- Add random projection encoder and Mamba/RetNet neural stubs
+
+## [0.8.0] - 2025-08-13
+- Add analytics module with SHAP/LIME wrappers, saliency maps, counterfactuals,
+  causal lag analysis, and simple reporting utilities
+
+## [0.7.0] - 2025-08-13
+- Add optional MLOps utilities for FastAPI feature services, drift detection and
+  feature validation
+
+## [0.6.0] - 2025-08-13
+- Introduce optional PyTorch-based neural encoders (CNN and Vision Transformer)
+- Add contrastive learning utilities, attention fusion and simple VAE generator
+- Provide style transfer helper and lightweight NAS search stub
+
 ## [0.5.0] - 2025-08-13
 - Provide scikit-learn, PyTorch and TensorFlow integration helpers
 - Allow exporting feature arrays as ONNX ``TensorProto`` objects

@@ -6,17 +6,88 @@ Encode series as images (Gramian Angular Fields, Recurrence Plots, simple
 spectrograms) and extract visual features such as intensity statistics,
 histograms, gradient histograms and Local Binary Patterns.
 
-Example notebooks are provided under `examples/`:
+See `examples/03_cli_workflow.md` for an end-to-end CLI walkthrough.
 
-- `01_basic_usage.ipynb` – encode a signal and extract features
-- `02_sliding_window.ipynb` – batch features via sliding windows
-- `03_cli_workflow.md` – end-to-end CLI walkthrough
+## Neural encoders (optional)
+
+Install the package with the `torch` extra to enable learnable CNN and
+Vision Transformer adapters:
+
+```bash
+poetry install -E torch
+```
+
+```python
+from tscv_vision.neural import TorchCNNEncoder
+
+encoder = TorchCNNEncoder()
+features = encoder.encode(img.astype("float32"))
+```
 
 ## Install
 
 ```bash
 poetry install
 ```
+
+## Analytics & interpretability
+
+Install with the `analytics` extra to enable optional SHAP/LIME wrappers and
+projection utilities:
+
+```bash
+poetry install -E analytics
+```
+
+```python
+from tscv_vision.analytics import saliency_map
+
+grad = saliency_map(lambda x: x.sum(), np.arange(10.0))
+```
+
+Install optional MLOps helpers with:
+
+```bash
+poetry install -E mlops
+```
+
+## Research utilities
+
+Install with the `research` extra to enable experiment tracking, fairness checks
+and differential-privacy noise:
+
+```bash
+poetry install -E research
+```
+
+```python
+import numpy as np
+from tscv_vision.research import track_experiment, bias_report
+
+log = track_experiment({"encoder": "randproj"}, "series.npy", "runs")
+report = bias_report(np.array([0.1, 0.2, 0.4]), np.array([0, 0, 1]))
+```
+
+## Next-generation architecture (experimental)
+
+Version 2.0 introduces an optional plugin-based architecture for advanced
+research workflows.  Register custom encoders, build graph-based feature
+pipelines and even generate Python code from high-level specifications:
+
+```python
+from tscv_vision.nextgen import Node, PipelineGraph, registry
+
+def scale(x: float) -> float:
+    return 2 * x
+
+registry.register("scale", scale)
+g = PipelineGraph()
+g.add_node(Node(name="out", op="scale", deps=["inp"]))
+result = g.run({"inp": 3.0})
+```
+
+The graph can be visualised (`tscv_vision.nextgen.visual.to_dot`) or executed in
+parallel (`tscv_vision.nextgen.distribute.execute_distributed`).
 
 ## Quick start
 
@@ -36,6 +107,23 @@ print(batch.shape)
 # Select specific feature extractors
 vec_small = features.extract_feature_vector(img, selected=["intensity", "hist"])
 print(vec_small.shape)
+```
+
+## Multi-modal utilities
+
+The ``multimodal`` module provides lightweight helpers for combining
+heterogeneous inputs and adapting features across domains.  Examples
+include weighted fusion of multi-variate series, simple metadata
+concatenation, CORAL domain alignment and graph-based propagation for
+related signals:
+
+```python
+from tscv_vision.multimodal import fuse_series, coral_align
+
+series = np.vstack([x, x * 2])
+fused = fuse_series(series, method="pca", n_components=1)
+
+aligned = coral_align(np.random.randn(10, 3), np.random.randn(8, 3))
 ```
 
 The spectrogram encoder pads the tail with zeros so all samples are covered and
@@ -59,6 +147,56 @@ print(imgs.shape)
 from tscv_vision import WindowedDataset
 ds = WindowedDataset(x, size=64, hop=32)
 feat, meta = next(iter(ds))
+```
+
+### Real-time streaming
+
+Process samples as they arrive with adaptive buffering and anomaly triggers:
+
+```python
+from tscv_vision.streaming import StreamingEncoder
+
+stream = StreamingEncoder(size=64, hop=16, anomaly_threshold=0.9)
+for sample in sensor():
+    for img in stream.push(sample):
+        ...  # use encoded image
+```
+
+## Domain-specific modules
+
+Utilities in :mod:`tscv_vision.domains` provide encoders and lightweight models
+tailored for particular application areas.  For example, market microstructure
+analysis for finance or heart-rate variability for healthcare:
+
+```python
+from tscv_vision.domains import finance, healthcare
+
+fin_feats = finance.microstructure_features(prices)
+hr, sdnn = healthcare.ecg_features(ecg)
+```
+
+## MLOps & production deployment
+
+Optional utilities under ``mlops`` help deploy the library at scale.  A FastAPI
+service can expose feature extraction over HTTP, Prometheus metrics track
+requests, and a simple drift detector monitors feature distributions:
+
+```python
+from tscv_vision.mlops import create_feature_service, DriftDetector
+
+app = create_feature_service()  # FastAPI app
+detector = DriftDetector()
+```
+
+Feature vectors may be validated and pushed to a Feast feature store for
+versioned storage:
+
+```python
+from tscv_vision.mlops import FeastWriter, validate_features
+
+validate_features(vec)
+store = FeastWriter(repo_path="./feature_repo")
+store.push("entity", {"gaf_feat": vec})
 ```
 
 ## CLI
@@ -112,6 +250,19 @@ def my_encoder(x):
 encoders.register_encoder("my_gaf", my_encoder)
 ```
 
+### AutoML utilities
+
+Basic helpers under :mod:`tscv_vision.automl` can analyse a time series,
+rank feature importance and perform lightweight evolutionary search over
+hyper-parameters:
+
+```python
+from tscv_vision import automl
+
+cfg = automl.suggest_encoders(x)
+order = automl.rank_feature_importance(features, labels)
+```
+
 ### Out-of-core and data formats
 
 `WindowedDataset` can stream directly from a memory-mapped `.npy` file:
@@ -122,6 +273,14 @@ ds = WindowedDataset("large.npy", size=64, hop=32)
 
 Utilities in :mod:`tscv_vision.io` provide optional helpers for Arrow,
 Parquet, and HDF5 formats (requires extra dependencies).
+
+## Documentation
+
+API and troubleshooting guides live under `docs/`:
+
+- `docs/api.md` – function signatures and return shapes
+- `docs/troubleshooting.md` – common errors and fixes
+- `docs/performance.md` – tuning tips and benchmarks
 
 ## License
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -82,7 +83,9 @@ def load_hdf5(path: str, dataset: str = "data") -> Array:
     return arr
 
 
-def save_npz(path: str, data: dict[str, Array], metadata: dict[str, object] | None = None) -> None:
+def save_npz(
+    path: str, data: dict[str, Array], metadata: dict[str, Any] | None = None
+) -> None:
     """Save arrays and optional ``metadata`` to ``path`` as ``.npz``.
 
     Parameters
@@ -98,9 +101,9 @@ def save_npz(path: str, data: dict[str, Array], metadata: dict[str, object] | No
         dictionary is serialized to JSON under the ``metadata`` key.
     """
 
-    out = dict(data)
+    out: dict[str, Any] = {k: v for k, v in data.items()}
     if metadata is not None:
-        out["metadata"] = np.array(json.dumps(metadata))
+        out["metadata"] = json.dumps(metadata)
     np.savez(path, **out)
 
 

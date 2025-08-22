@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tscv-vision"
-version = "0.5.0"
+version = "0.10.0"
 description = "Computer-vision feature engineering for 1D time series (NumPy-first)."
 authors = ["Diogo Ribeiro <dfr@esmad.ipp.pt>"]
 license = "MIT"
@@ -10,6 +10,10 @@ packages = [{ include = "tscv_vision", from = "src" }]
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
 numpy = ">=1.24"
+torch = {version = ">=2.2", optional = true}
+fastapi = {version = ">=0.110", optional = true}
+prometheus-client = {version = ">=0.20", optional = true}
+feast = {version = ">=0.42", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7"
@@ -22,6 +26,12 @@ pre-commit = ">=3.7"
 [tool.poetry.scripts]
 tscv-features = "tscv_vision.cli:main"
 
+[tool.poetry.extras]
+torch = ["torch"]
+mlops = ["fastapi", "prometheus-client", "feast"]
+analytics = ["shap", "lime", "scikit-learn", "umap-learn"]
+research = []
+
 [build-system]
 requires = ["poetry-core>=1.7.0"]
 build-backend = "poetry.core.masonry.api"
@@ -29,6 +39,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 100
 src = ["src"]
+exclude = ["examples"]
 
 [tool.ruff.lint]
 select = ["E","F","I","W","B","UP","NPY"]

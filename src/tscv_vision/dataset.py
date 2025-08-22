@@ -131,5 +131,13 @@ def iter_parquet(path: str, batch_size: int = 1024) -> Iterator[Array]:
         yield np.asarray(batch.column(0).to_numpy(), dtype=float)
 
 
-__all__ = ["WindowedDataset", "iter_npz", "iter_parquet"]
+def stream_directory(path: str) -> Iterator[Array]:
+    """Yield memory-mapped ``.npy`` arrays from ``path`` one by one."""
+
+    for name in sorted(os.listdir(path)):
+        if name.endswith(".npy"):
+            yield np.load(os.path.join(path, name), mmap_mode="r")
+
+
+__all__ = ["WindowedDataset", "iter_npz", "iter_parquet", "stream_directory"]
 

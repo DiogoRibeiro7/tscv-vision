@@ -26,3 +26,13 @@ def test_extract_batch_multichannel() -> None:
     batch = features.extract_batch(imgs, bins=8)
     assert batch.shape[0] == 2
     assert batch.shape[1] == 2 * (6 + 8 + 16 + 256)
+
+
+def test_extract_batch_lazy() -> None:
+    rng = np.random.default_rng(0)
+    imgs = rng.normal(size=(3, 8, 8))
+    lazy_iter = features.extract_batch(imgs, bins=8, lazy=True)
+    assert not isinstance(lazy_iter, np.ndarray)
+    collected = list(lazy_iter)
+    stacked = features.extract_batch(imgs, bins=8)
+    np.testing.assert_allclose(np.vstack(collected), stacked)

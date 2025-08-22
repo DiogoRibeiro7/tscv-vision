@@ -64,6 +64,51 @@ def test_encoder_validations_and_modes() -> None:
     encoders.spectrogram(x_long, win=32, hop=8, window="rect")
 
 
+def test_non_finite_inputs_raise() -> None:
+    arr = np.array([0.0, np.nan])
+    with pytest.raises(ValueError):
+        encoders.gaf(arr)
+    with pytest.raises(ValueError):
+        encoders.recurrence_plot(arr)
+    with pytest.raises(ValueError):
+        encoders.spectrogram(arr, win=8)
+
+
+def test_short_constant_and_extreme_signals() -> None:
+    const_short = np.ones(2)
+    assert encoders.gaf(const_short).shape == (2, 2)
+    assert encoders.recurrence_plot(const_short).shape == (2, 2)
+    const_long = np.ones(16)
+    spec = encoders.spectrogram(const_long, win=8, hop=4)
+    assert spec.shape[1] > 0 and np.isfinite(spec).all()
+    # very short signal length 1
+    single = np.array([5.0])
+    assert encoders.gaf(single).shape == (1, 1)
+    assert encoders.recurrence_plot(single).shape == (1, 1)
+
+
+def test_param_validations() -> None:
+    x = np.arange(8.0)
+    with pytest.raises(ValueError):
+        encoders.recurrence_plot(x, eps=-0.1)
+    with pytest.raises(ValueError):
+        encoders.recurrence_plot(x, eps=1.1)
+    with pytest.raises(ValueError):
+        encoders.recurrence_plot(x, eps=np.nan)
+    with pytest.raises(ValueError):
+        encoders.spectrogram(x, win=8, hop=0)
+    with pytest.raises(ValueError):
+        encoders.spectrogram(x, win=8, hop=16)
+
+
+def test_extreme_value_range() -> None:
+    pair = np.array([1e300, -1e300])
+    assert np.isfinite(encoders.gaf(pair)).all()
+    assert np.isfinite(encoders.recurrence_plot(pair)).all()
+    spec = encoders.spectrogram(np.tile(pair, 4), win=8)
+    assert np.isfinite(spec).all()
+
+
 def test_register_encoder() -> None:
     def dummy(x: np.ndarray) -> np.ndarray:
         return encoders.gaf(x)

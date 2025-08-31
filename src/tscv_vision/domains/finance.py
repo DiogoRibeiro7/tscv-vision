@@ -57,3 +57,35 @@ def detect_regime(prices: Array, coeffs: Array = REGIME_COEFFS) -> int:
     mean_ret = microstructure_features(prices)[0]
     score = coeffs[0] + coeffs[1] * mean_ret
     return int(score > 0)
+
+
+def generate_price_series(
+    n: int = 100,
+    drift: float = 0.001,
+    volatility: float = 0.01,
+    *,
+    seed: int = 0,
+) -> Array:
+    """Generate a synthetic geometric random walk for prices."""
+    rng = np.random.default_rng(seed)
+    returns = rng.normal(drift, volatility, size=n)
+    return np.asarray(100.0 * np.exp(np.cumsum(returns)), dtype=float)
+
+
+def augment_regime_switch(
+    prices: Array,
+    switch_point: int | None = None,
+    factor: float = -1.0,
+) -> Array:
+    """Simulate a regime switch by flipping return signs after ``switch_point``."""
+    pr = np.asarray(prices, dtype=float)
+    if pr.ndim != 1:
+        raise ValueError("prices must be 1D")
+    n = pr.size
+    sp = switch_point if switch_point is not None else n // 2
+    if not 0 < sp < n:
+        raise ValueError("invalid switch_point")
+    log_ret = np.log(pr[1:] / pr[:-1])
+    log_ret[sp - 1 :] *= factor
+    augmented = pr[0] * np.exp(np.cumsum(np.concatenate([[0.0], log_ret])))
+    return np.asarray(augmented, dtype=float)

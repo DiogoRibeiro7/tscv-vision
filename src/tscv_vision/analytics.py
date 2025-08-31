@@ -7,7 +7,90 @@ from typing import Any, Callable, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from .encoders import _validate_series
+
 Array = NDArray[np.float64]
+
+
+def _scale_unit(x: Array) -> Array:
+    """Return ``x`` scaled to ``[0, 1]``."""
+    x_min = float(np.min(x))
+    x_max = float(np.max(x))
+    denom = x_max - x_min if x_max != x_min else 1.0
+    return (x - x_min) / denom
+
+
+class TSHAPExplainer:
+    """Time-series SHAP explainer using window and frequency occlusion.
+
+    Parameters
+    ----------
+    model:
+        Callable mapping a 1D series to a scalar prediction.
+    baseline:
+        Value used to occlude windows. Defaults to ``0.0``.
+
+    Examples
+    --------
+    >>> model = lambda x: float(x.mean())
+    >>> explainer = TSHAPExplainer(model)
+    >>> t_imp, f_imp = explainer.explain(np.arange(8.0), window=4)
+    >>> t_imp.shape, f_imp.shape
+    ((8,), (5,))
+    """
+
+    def __init__(self, model: Callable[[Array], float], baseline: float | None = None):
+        self.model = model
+        self.baseline = 0.0 if baseline is None else float(baseline)
+
+    def explain(self, series: Array, window: int = 10) -> tuple[Array, Array]:
+        """Return time and frequency attributions for ``series``.
+
+        Parameters
+        ----------
+        series:
+            1D input series.
+        window:
+            Window length for time occlusion. Must be ``>=1``.
+
+        Returns
+        -------
+        time_importance, freq_importance:
+            Arrays of shape ``(N,)`` and ``(N//2 + 1,)`` scaled to ``[0, 1]``.
+
+        Raises
+        ------
+        ValueError
+            If ``window`` is invalid or ``series`` is not 1D.
+        """
+
+        sig = _validate_series(series)
+        n = sig.size
+        if window < 1 or window > n:
+            raise ValueError("window must be between 1 and len(series)")
+
+        base_pred = float(self.model(sig))
+
+        time_vals = np.zeros(n, dtype=float)
+        for start in range(0, n, window):
+            stop = min(start + window, n)
+            pert = sig.copy()
+            pert[start:stop] = self.baseline
+            diff = base_pred - float(self.model(pert))
+            time_vals[start:stop] = diff
+        time_vals = _scale_unit(time_vals)
+
+        fft = np.fft.rfft(sig)
+        freq_vals = np.zeros(fft.size, dtype=float)
+        for i in range(fft.size):
+            pert_fft = fft.copy()
+            pert_fft[i] = 0
+            pert = np.fft.irfft(pert_fft, n)
+            diff = base_pred - float(self.model(pert))
+            freq_vals[i] = diff
+        freq_vals = _scale_unit(freq_vals)
+
+        return time_vals, freq_vals
 
 
 def shap_values(model: Callable[[Array], Array], data: Array) -> Array:
@@ -79,6 +162,106 @@ def saliency_map(model: Callable[[Array], float], series: Array, eps: float = 1e
     return grad
 
 
+def gaf_attribution(importance: Array) -> Array:
+    """Collapse GAF importance matrix back to time domain.
+
+    Parameters
+    ----------
+    importance:
+        Square matrix ``(N, N)`` with attribution weights.
+
+    Returns
+    -------
+    Array
+        1D importance over time scaled to ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``importance`` is not a square matrix.
+
+    Examples
+    --------
+    >>> gaf_attribution(np.ones((3, 3)))
+    array([1., 1., 1.])
+    """
+
+    mat = np.asarray(importance, dtype=float)
+    if mat.ndim != 2 or mat.shape[0] != mat.shape[1]:
+        raise ValueError("importance must be a square matrix")
+    return _scale_unit(mat.sum(axis=0))
+
+
+def rp_attribution(importance: Array) -> Array:
+    """Collapse recurrence plot importance matrix to time domain."""
+
+    return gaf_attribution(importance)
+
+
+def spectrogram_attribution(importance: Array) -> Array:
+    """Collapse spectrogram importance to time windows.
+
+    Parameters
+    ----------
+    importance:
+        2D array ``(freq, time)`` with attribution weights.
+
+    Returns
+    -------
+    Array
+        1D array ``(time,)`` scaled to ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``importance`` is not 2D.
+    """
+
+    mat = np.asarray(importance, dtype=float)
+    if mat.ndim != 2:
+        raise ValueError("importance must be 2D")
+    return _scale_unit(mat.sum(axis=0))
+
+
+def plot_importance(series: Array, importance: Array, title: str | None = None) -> Any:
+    """Interactive plot of ``series`` with ``importance`` overlay.
+
+    Clicking highlights the nearest time index.
+
+    Examples
+    --------
+    >>> fig = plot_importance(np.arange(5.0), np.linspace(0, 1, 5))
+    >>> isinstance(fig, object)
+    True
+    """
+
+    sig = _validate_series(series)
+    imp = _validate_series(importance)
+    if sig.size != imp.size:
+        raise ValueError("series and importance must match in length")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    ax.plot(sig, label="series")
+    ax.bar(np.arange(sig.size), imp, alpha=0.3, label="importance")
+    ax.set_xlabel("time")
+    ax.set_ylabel("value")
+    if title is not None:
+        ax.set_title(title)
+    ax.legend()
+
+    def on_click(event: Any) -> None:  # pragma: no cover - interactive callback
+        if event.xdata is None:
+            return
+        idx = int(round(event.xdata))
+        if 0 <= idx < sig.size:
+            ax.axvline(idx, color="red", alpha=0.5)
+            fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("button_press_event", on_click)
+    return fig
+
+
 def counterfactual_replace(
     series: Array,
     start: int,
@@ -95,6 +278,54 @@ def counterfactual_replace(
     pert[start:stop] = value
     diff = model(pert) - base
     return pert, float(diff)
+
+
+def generate_counterfactual(
+    series: Array,
+    model: Callable[[Array], float],
+    target: float,
+    step: float = 0.1,
+    max_iter: int = 100,
+) -> Array:
+    """Generate a counterfactual series moving prediction toward ``target``.
+
+    Parameters
+    ----------
+    series:
+        1D input series.
+    model:
+        Callable returning a scalar prediction.
+    target:
+        Desired prediction value.
+    step:
+        Gradient descent step size.
+    max_iter:
+        Maximum optimisation iterations.
+
+    Returns
+    -------
+    Array
+        Counterfactual series with shape ``(N,)``.
+
+    Examples
+    --------
+    >>> model = lambda x: float(x.mean())
+    >>> cf = generate_counterfactual(np.zeros(4), model, target=1.0, step=0.5)
+    >>> round(model(cf), 1)
+    1.0
+    """
+
+    sig = _validate_series(series)
+    cf = sig.copy()
+    for _ in range(max_iter):
+        pred = float(model(cf))
+        diff = pred - target
+        if abs(diff) < 1e-3:
+            break
+        grad = saliency_map(model, cf)
+        grad_norm = float(np.linalg.norm(grad)) or 1.0
+        cf -= step * diff * grad / grad_norm
+    return cf
 
 
 def project_features(features: Array, method: str = "tsne", **kwargs: Any) -> Array:
@@ -171,6 +402,12 @@ def generate_report(results: dict[str, Any]) -> str:
 
 
 __all__ = [
+    "TSHAPExplainer",
+    "gaf_attribution",
+    "rp_attribution",
+    "spectrogram_attribution",
+    "plot_importance",
+    "generate_counterfactual",
     "shap_values",
     "lime_explain",
     "saliency_map",

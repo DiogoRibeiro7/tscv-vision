@@ -25,3 +25,25 @@ def extreme_event_score(series: Array, period: int, threshold: float = EXTREME_T
     """Score extreme events relative to threshold."""
     _, _, extreme = seasonal_trend_features(series, period)
     return float(extreme / threshold)
+
+
+def generate_temperature_series(
+    n: int = 365,
+    amplitude: float = 10.0,
+    noise: float = 0.5,
+    *,
+    seed: int = 0,
+) -> Array:
+    """Generate a synthetic seasonal temperature series."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n)
+    seasonal = amplitude * np.sin(2 * np.pi * t / n)
+    return seasonal + rng.normal(0.0, noise, size=n)
+
+
+def augment_regime_shift(series: Array, delta: float = 1.0) -> Array:
+    """Add a mean shift to the second half of the series."""
+    s = np.asarray(series, dtype=float).copy()
+    mid = s.size // 2
+    s[mid:] += delta
+    return s

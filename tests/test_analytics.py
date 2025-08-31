@@ -1,53 +1,51 @@
+import matplotlib
 import numpy as np
+import pytest
 
-from tscv_vision import analytics
+matplotlib.use("Agg")
 
-
-def test_saliency_map_sum() -> None:
-    series = np.arange(5.0)
-    grad = analytics.saliency_map(lambda x: float(x.sum()), series)
-    assert np.allclose(grad, 1.0)
-
-
-def test_project_features_fallback() -> None:
-    rng = np.random.default_rng(0)
-    feats = rng.standard_normal((10, 4))
-    proj = analytics.project_features(feats, method="tsne", perplexity=5)
-    assert proj.shape == (10, 2)
+from tscv_vision.analytics import (
+    TSHAPExplainer,
+    gaf_attribution,
+    generate_counterfactual,
+    plot_importance,
+    rp_attribution,
+    spectrogram_attribution,
+)
 
 
-def test_group_significance() -> None:
-    a = np.array([1.0, 1.2, 0.9, 1.1])
-    b = np.array([2.0, 1.9, 2.1, 2.2])
-    t, p = analytics.group_significance(a, b)
-    assert t < 0
-    assert 0 <= p <= 1
-
-
-def test_cross_causal_lag() -> None:
-    x = np.zeros(20)
-    y = np.zeros(20)
-    x[5] = 1
-    y[7] = 1
-    lag = analytics.cross_causal_lag(x, y, max_lag=5)
-    assert lag == -2
-
-
-def test_shap_missing() -> None:
-    rng = np.random.default_rng(0)
-    feats = rng.standard_normal((4, 3))
-    try:
-        analytics.shap_values(lambda z: z, feats)
-    except ImportError:
-        pass
-    else:
-        assert True
-
-
-def test_counterfactual_replace() -> None:
-    series = np.zeros(10)
+def test_tshap_explainer_shapes_and_errors() -> None:
     def model(x: np.ndarray) -> float:
-        return float(x.sum())
-    pert, diff = analytics.counterfactual_replace(series, 2, 4, 1.0, model)
-    assert np.allclose(pert[2:4], 1.0)
-    assert np.isclose(diff, 2.0)
+        return float(x.mean())
+
+    explainer = TSHAPExplainer(model)
+    t_imp, f_imp = explainer.explain(np.arange(8.0), window=4)
+    assert t_imp.shape == (8,)
+    assert f_imp.ndim == 1
+    with pytest.raises(ValueError):
+        explainer.explain(np.arange(5.0), window=0)
+
+
+def test_attribution_mappings() -> None:
+    mat = np.arange(9.0).reshape(3, 3)
+    gaf = gaf_attribution(mat)
+    rp = rp_attribution(mat)
+    assert np.allclose(gaf, rp)
+    spec = spectrogram_attribution(np.ones((4, 5)))
+    assert spec.shape == (5,)
+    with pytest.raises(ValueError):
+        gaf_attribution(np.ones((2, 3)))
+
+
+def test_plot_importance_returns_figure() -> None:
+    fig = plot_importance(np.ones(5), np.zeros(5))
+    assert hasattr(fig, "canvas")
+
+
+def test_generate_counterfactual_changes_prediction() -> None:
+    def model(x: np.ndarray) -> float:
+        return float(x.mean())
+
+    series = np.zeros(4)
+    cf = generate_counterfactual(series, model, target=1.0, step=0.5, max_iter=50)
+    assert model(cf) == pytest.approx(1.0, abs=1e-2)

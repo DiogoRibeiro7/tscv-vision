@@ -47,3 +47,18 @@ def anomaly_score(signal: Array, threshold: float = ANOMALY_THRESHOLD) -> float:
     z = (sig - sig.mean()) / (sig.std() + 1e-12)
     score = float(np.max(np.abs(z)))
     return float(score / threshold)
+
+
+def generate_sensor_series(n: int = 100, *, seed: int = 0) -> Array:
+    """Generate a synthetic sensor signal with Gaussian noise."""
+    rng = np.random.default_rng(seed)
+    return rng.normal(0.0, 1.0, size=n)
+
+
+def augment_dropout(signal: Array, drop_prob: float = 0.1, *, seed: int = 0) -> Array:
+    """Randomly drop samples to simulate sensor outages."""
+    rng = np.random.default_rng(seed)
+    sig = np.asarray(signal, dtype=float).copy()
+    mask = rng.random(sig.shape) < drop_prob
+    sig[mask] = 0.0
+    return sig

@@ -24,3 +24,24 @@ def quality_score(signal: Array, coeffs: Array = QUALITY_WEIGHTS) -> float:
     """Estimate quality using weighted vibration features."""
     feats = vibration_features(signal)
     return float(feats @ coeffs)
+
+
+def generate_vibration_series(n: int = 100, *, seed: int = 0) -> Array:
+    """Generate a synthetic vibration signal."""
+    rng = np.random.default_rng(seed)
+    return rng.normal(0.0, 1.0, size=n)
+
+
+def augment_spike(
+    signal: Array,
+    probability: float = 0.01,
+    scale: float = 1.0,
+    *,
+    seed: int = 0,
+) -> Array:
+    """Inject random spikes to simulate faults."""
+    rng = np.random.default_rng(seed)
+    sig = np.asarray(signal, dtype=float).copy()
+    mask = rng.random(sig.shape) < probability
+    sig[mask] += rng.normal(0.0, scale, size=mask.sum())
+    return sig

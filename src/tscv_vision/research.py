@@ -8,7 +8,7 @@ import importlib
 import json
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -130,8 +130,8 @@ def add_dp_noise(
     if rng is None:
         rng = np.random.default_rng()
     scale = 1.0 / epsilon
-    noise = rng.laplace(0.0, scale, size=features.shape)
-    return cast(Array, features + noise)
+    noise: Array = rng.laplace(0.0, scale, size=features.shape)
+    return features + noise
 
 
 # reporting ------------------------------------------------------------------

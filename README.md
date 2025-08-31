@@ -68,6 +68,24 @@ log = track_experiment({"encoder": "randproj"}, "series.npy", "runs")
 report = bias_report(np.array([0.1, 0.2, 0.4]), np.array([0, 0, 1]))
 ```
 
+## Domain-specific models
+
+Install with the `domains` extra to enable lightweight transfer-learning helpers:
+
+```bash
+poetry install -E domains
+```
+
+```python
+import numpy as np
+from tscv_vision.domains import DomainAdapter, finance
+
+series = [finance.generate_price_series(50, drift=d) for d in (-0.01, 0.01)]
+labels = np.array([0, 1])
+adapter = DomainAdapter(finance.microstructure_features)
+adapter.fit(series, labels)
+```
+
 ## Next-generation architecture (experimental)
 
 Version 2.0 introduces an optional plugin-based architecture for advanced
@@ -108,6 +126,15 @@ print(batch.shape)
 vec_small = features.extract_feature_vector(img, selected=["intensity", "hist"])
 print(vec_small.shape)
 ```
+
+## Built-in encoders
+
+- `gaf` / `gadf` – Gramian Angular Fields
+- `rp` – Recurrence Plot
+- `spec` – STFT spectrogram
+- `vg` – Visibility Graph adjacency
+- `shapelet` – Shapelet Transform distance maps
+- `mp` – Matrix Profile
 
 ## Multi-modal utilities
 
@@ -151,7 +178,9 @@ feat, meta = next(iter(ds))
 
 ### Real-time streaming
 
-Process samples as they arrive with adaptive buffering and anomaly triggers:
+Process samples as they arrive with adaptive buffering and anomaly triggers. The
+encoder supports incremental updates, optional GPU acceleration via CuPy, and
+adaptive precision scaling for throughput-sensitive deployments:
 
 ```python
 from tscv_vision.streaming import StreamingEncoder
@@ -161,6 +190,8 @@ for sample in sensor():
     for img in stream.push(sample):
         ...  # use encoded image
 ```
+
+See ``docs/performance.md`` for tuning tips and benchmarking helpers.
 
 ## Domain-specific modules
 
@@ -179,13 +210,30 @@ hr, sdnn = healthcare.ecg_features(ecg)
 
 Optional utilities under ``mlops`` help deploy the library at scale.  A FastAPI
 service can expose feature extraction over HTTP, Prometheus metrics track
-requests, and a simple drift detector monitors feature distributions:
+requests, a model registry versions encoders and A/B tests compare variants.
+Monitoring endpoints expose health and drift metrics while ``safe_encode`` and
+``batch_process`` add graceful degradation and large-batch processing:
 
 ```python
-from tscv_vision.mlops import create_feature_service, DriftDetector
+from tscv_vision.mlops import (
+    ABTester,
+    DriftDetector,
+    ModelRegistry,
+    batch_process,
+    create_feature_service,
+    create_monitoring_app,
+    safe_encode,
+)
 
-app = create_feature_service()  # FastAPI app
-detector = DriftDetector()
+app = create_feature_service()
+monitor = create_monitoring_app(DriftDetector())
+registry = ModelRegistry()
+tester = ABTester()
+
+# A/B test metrics
+tester.add("A", 0.6)
+tester.add("B", 0.7)
+result = tester.compare()
 ```
 
 Feature vectors may be validated and pushed to a Feast feature store for
@@ -262,6 +310,23 @@ from tscv_vision import automl
 cfg = automl.suggest_encoders(x)
 order = automl.rank_feature_importance(features, labels)
 ```
+
+### Adaptive feature engineering pipeline
+
+Automatically select the most informative encoder and features:
+
+```python
+from tscv_vision.pipeline import AdaptivePipeline
+import numpy as np
+
+X = np.random.rand(32, 64)
+y = (X.mean(axis=1) > 0.5).astype(int)
+pipe = AdaptivePipeline(random_state=0)
+feats = pipe.fit_transform(X, y)
+```
+
+Use :func:`tscv_vision.benchmark.benchmark_pipeline` to compare pipeline
+configurations.
 
 ### Out-of-core and data formats
 

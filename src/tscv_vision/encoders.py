@@ -451,6 +451,149 @@ def sax(x: Array, segments: int = 8, alphabet: int = 8) -> Array:
     return cast(Array, img)
 
 
+def visibility_graph(x: Array) -> Array:
+    """Natural visibility graph adjacency matrix.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+
+    Returns
+    -------
+    ndarray
+        ``(N, N)`` binary adjacency matrix where ``1`` denotes visibility.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` is invalid.
+
+    Examples
+    --------
+    >>> x = np.array([0.0, 1.0, 0.5])
+    >>> visibility_graph(x).shape
+    (3, 3)
+    """
+
+    x = _validate_series(x)
+    n = x.size
+    adj = np.zeros((n, n), dtype=float)
+    for i in range(n):
+        for j in range(i + 1, n):
+            yi, yj = x[i], x[j]
+            ks = slice(i + 1, j)
+            if ks.start >= ks.stop:
+                adj[i, j] = adj[j, i] = 1.0
+                continue
+            k_idx = np.arange(1, j - i)
+            y_line = yi + (yj - yi) * (k_idx / (j - i))
+            if np.all(x[ks] < y_line):
+                adj[i, j] = adj[j, i] = 1.0
+    return cast(Array, adj)
+
+
+def shapelet_transform(
+    x: Array, k: int = 3, length: int | None = None, seed: int | None = None
+) -> Array:
+    """Distance maps to randomly sampled shapelets.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    k:
+        Number of shapelets to sample ``>=1``.
+    length:
+        Length of each shapelet; defaults to ``len(x) // k``.
+    seed:
+        Optional RNG seed for reproducibility.
+
+    Returns
+    -------
+    ndarray
+        ``(k, N - length + 1)`` distance maps scaled to ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If parameters are invalid or ``x`` is invalid.
+
+    Examples
+    --------
+    >>> x = np.sin(np.linspace(0, 1, 20))
+    >>> shapelet_transform(x, k=2, length=5, seed=0).shape
+    (2, 16)
+    """
+
+    x = _validate_series(x)
+    n = x.size
+    if k < 1:
+        raise ValueError("k must be >= 1")
+    if length is None:
+        length = max(1, n // (k + 1))
+    if length < 1 or length > n:
+        raise ValueError("length must be in [1, len(x)]")
+    windows = np.lib.stride_tricks.sliding_window_view(x, length)
+    n_windows = windows.shape[0]
+    if k > n_windows:
+        raise ValueError("k cannot exceed number of subsequences")
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(n_windows, size=k, replace=False)
+    shapelets = windows[idx]
+    dists = np.sqrt(((windows[None, :, :] - shapelets[:, None, :]) ** 2).sum(axis=2))
+    dists = dists / (np.max(dists) + 1e-12)
+    return cast(Array, dists)
+
+
+def matrix_profile(x: Array, m: int) -> Array:
+    """Naive matrix profile for motif/discord discovery.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    m:
+        Subsequence length ``>=2``.
+
+    Returns
+    -------
+    ndarray
+        Matrix profile ``(N - m + 1,)`` scaled to ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``m`` is not in ``[2, len(x)]`` or ``x`` invalid.
+
+    Examples
+    --------
+    >>> x = np.sin(np.linspace(0, 4 * np.pi, 32))
+    >>> matrix_profile(x, m=4).shape
+    (29,)
+    """
+
+    x = _validate_series(x)
+    n = x.size
+    if m < 2 or m > n:
+        raise ValueError("m must be in [2, len(x)]")
+    windows = np.lib.stride_tricks.sliding_window_view(x, m)
+    means = windows.mean(axis=1, keepdims=True)
+    stds = windows.std(axis=1, keepdims=True)
+    z = (windows - means) / (stds + 1e-12)
+    n_sub = z.shape[0]
+    profile = np.empty(n_sub, dtype=float)
+    excl = m // 2
+    for i in range(n_sub):
+        dist = np.linalg.norm(z[i] - z, axis=1)
+        lo = max(0, i - excl)
+        hi = min(n_sub, i + excl + 1)
+        dist[lo:hi] = np.inf
+        profile[i] = dist.min()
+    profile = profile / (np.max(profile) + 1e-12)
+    return cast(Array, profile)
+
+
 def random_projection_image(x: Array, size: int = 32, seed: int = 0) -> Array:
     """Random projection encoder producing a 2D image.
 
@@ -507,6 +650,9 @@ register_encoder("mtf", mtf)
 register_encoder("msrp", multi_scale_rp)
 register_encoder("dtw", dtw_matrix)
 register_encoder("sax", sax)
+register_encoder("vg", visibility_graph)
+register_encoder("shapelet", shapelet_transform)
+register_encoder("mp", matrix_profile)
 register_encoder("randproj", random_projection_image)
 register_encoder("ensemble", ensemble)
 
@@ -521,6 +667,9 @@ __all__ = [
     "multi_scale_rp",
     "dtw_matrix",
     "sax",
+    "visibility_graph",
+    "shapelet_transform",
+    "matrix_profile",
     "random_projection_image",
     "ensemble",
     "register_encoder",

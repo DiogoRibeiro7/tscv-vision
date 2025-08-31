@@ -11,6 +11,12 @@ from . import (
     iot,
     manufacturing,
 )
+from .adapter import (
+    DomainAdapter,
+    PrototypicalClassifier,
+    classification_metrics,
+    uncertainty_sampling,
+)
 
 __all__ = [
     "finance",
@@ -20,4 +26,8 @@ __all__ = [
     "astronomy",
     "climate",
     "manufacturing",
+    "DomainAdapter",
+    "PrototypicalClassifier",
+    "classification_metrics",
+    "uncertainty_sampling",
 ]

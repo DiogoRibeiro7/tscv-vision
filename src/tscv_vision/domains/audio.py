@@ -30,3 +30,40 @@ def rhythm_score(signal: Array, sr: float = 16_000.0) -> float:
     """Estimate rhythmicity via weighted MFCC sum."""
     coeffs = mfcc_features(signal, sr)
     return float(coeffs @ RHYTHM_WEIGHTS)
+
+
+def generate_tone(
+    n: int = 16_000,
+    freq: float = 440.0,
+    sr: float = 16_000.0,
+    *,
+    seed: int = 0,
+) -> Array:
+    """Generate a sinusoidal tone for testing.
+
+    Parameters
+    ----------
+    n : int, optional
+        Number of samples. Default is ``16000``.
+    freq : float, optional
+        Frequency in Hz. Default is ``440``.
+    sr : float, optional
+        Sampling rate. Default is ``16000``.
+    seed : int, optional
+        RNG seed for reproducibility.
+
+    Returns
+    -------
+    Array
+        Generated waveform.
+    """
+    rng = np.random.default_rng(seed)
+    t = np.arange(n) / sr
+    tone = np.sin(2 * np.pi * freq * t)
+    return tone.astype(float) + rng.normal(0.0, 0.0, size=n)
+
+
+def augment_time_shift(signal: Array, shift: int) -> Array:
+    """Time-shift an audio signal by ``shift`` samples."""
+    sig = np.asarray(signal, dtype=float)
+    return np.roll(sig, shift)

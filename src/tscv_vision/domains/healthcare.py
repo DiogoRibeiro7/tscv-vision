@@ -44,3 +44,18 @@ def arrhythmia_risk(signal: Array, fs: float = 250.0, coeffs: Array = ARRHYTHMIA
     _, sdnn = ecg_features(signal, fs)
     features = np.array([1.0, sdnn])
     return float(features @ coeffs)
+
+
+def generate_ecg(n: int = 250, fs: float = 250.0, *, seed: int = 0) -> Array:
+    """Generate a synthetic ECG-like waveform."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n) / fs
+    signal = np.sin(2 * np.pi * 1.0 * t)
+    return signal + 0.01 * rng.normal(size=n)
+
+
+def augment_noise(signal: Array, scale: float = 0.01, *, seed: int = 0) -> Array:
+    """Add Gaussian noise to an ECG signal."""
+    rng = np.random.default_rng(seed)
+    sig = np.asarray(signal, dtype=float)
+    return sig + rng.normal(0.0, scale, size=sig.shape)

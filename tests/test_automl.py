@@ -1,6 +1,28 @@
+import importlib.util
+import sys
+import types
+from pathlib import Path
+
 import numpy as np
 
-from tscv_vision import automl
+BASE = Path(__file__).resolve().parents[1] / "src" / "tscv_vision"
+package = types.ModuleType("tscv_vision")
+package.__path__ = [str(BASE)]  # type: ignore[attr-defined]
+sys.modules["tscv_vision"] = package
+
+for name in ["encoders", "features"]:
+    spec = importlib.util.spec_from_file_location(f"tscv_vision.{name}", BASE / f"{name}.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[f"tscv_vision.{name}"] = module
+    spec.loader.exec_module(module)  # type: ignore[assignment]
+
+spec = importlib.util.spec_from_file_location("tscv_vision.automl", BASE / "automl.py")
+assert spec and spec.loader
+automl = importlib.util.module_from_spec(spec)
+sys.modules["tscv_vision.automl"] = automl
+spec.loader.exec_module(automl)  # type: ignore[assignment]
+AutoTSCV = automl.AutoTSCV
 
 
 def test_suggest_encoders() -> None:
@@ -53,3 +75,24 @@ def test_select_feature_subset() -> None:
     idx = automl.select_feature_subset(X, y, max_features=2, objective=obj)
     assert 2 in idx
     assert idx.size <= 2
+
+
+def test_auto_tscv_basic() -> None:
+    t = np.linspace(0, 2 * np.pi, 64)
+    X = [np.sin(t), np.sin(t + np.pi / 2), np.linspace(0, 1, 64), np.linspace(0, 1, 64) + 0.1]
+    y = np.array([0, 0, 1, 1])
+    model = AutoTSCV()
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert preds.shape == y.shape
+    assert np.mean(preds == y) >= 0.5
+    assert model.profile_ is not None
+
+
+def test_auto_tscv_drift_detection() -> None:
+    t = np.linspace(0, 1, 32)
+    base = [np.sin(2 * np.pi * t)]
+    auto = AutoTSCV()
+    auto.profile(base)
+    shifted = [np.sin(2 * np.pi * t) + 5]
+    assert auto.detect_drift(shifted, threshold=0.1)

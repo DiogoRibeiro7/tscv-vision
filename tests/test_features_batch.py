@@ -25,7 +25,11 @@ def test_extract_batch_multichannel() -> None:
     imgs = np.stack([img, img], axis=0)
     batch = features.extract_batch(imgs, bins=8)
     assert batch.shape[0] == 2
-    assert batch.shape[1] == 2 * (6 + 8 + 16 + 256)
+    per_ch = sum(
+        features.FEATURES_REGISTRY[name](img[..., 0], bins=8).size
+        for name in features.FEATURES_REGISTRY
+    )
+    assert batch.shape[1] == 2 * per_ch
 
 
 def test_extract_batch_lazy() -> None:

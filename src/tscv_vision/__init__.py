@@ -1,15 +1,20 @@
 """Top-level package for tscv-vision."""
 
+try:  # pragma: no cover - optional dependency paths
+    from . import domains
+except Exception:
+    domains = None  # type: ignore[assignment]
+
 from . import (
     aggregation,
     analysis,
     analytics,
     automl,
     dataset,
-    domains,
     encoders,
     features,
     fusion,
+    gpu,
     io,
     irregular,
     ml_integration,
@@ -22,6 +27,7 @@ from . import (
     research,
     streaming,
 )
+from .automl import AutoTSCV
 from .dataset import WindowedDataset
 
 __all__ = [
@@ -36,6 +42,18 @@ __all__ = [
     "fusion",
     "io",
     "irregular",
+    "aggregation",
+    "analysis",
+    "analytics",
+    "automl",
+    "dataset",
+    "domains",
+    "encoders",
+    "features",
+    "fusion",
+    "gpu",
+    "io",
+    "irregular",
     "ml_integration",
     "mlops",
     "multimodal",
@@ -46,6 +64,7 @@ __all__ = [
     "research",
     "streaming",
     "WindowedDataset",
+    "AutoTSCV",
 ]
 
 __version__ = "0.10.0"

@@ -264,12 +264,15 @@ def gaf(
         except Exception:  # pragma: no cover - optional path
             pass
         else:
-            return _gaf_gpu(
-                x,
-                method=method,
-                device=gpu_device,
-                mem_limit=gpu_mem_limit,
-            )
+            try:
+                return _gaf_gpu(
+                    x,
+                    method=method,
+                    device=gpu_device,
+                    mem_limit=gpu_mem_limit,
+                )
+            except RuntimeError:
+                pass
     if use_cython and _HAS_CYTHON:
         return cast(Array, _gaf_cy(x, summation))
     if use_numba and _HAS_NUMBA:
@@ -424,21 +427,24 @@ def spectrogram(
 
     frames, n_frames, x_pad = _sliding_view(x, win, hop)
 
-    mag: Array
+    mag: Array | None = None
     if use_gpu:
         try:
             from .gpu.encoders import spectrogram as _spec_gpu
         except Exception:  # pragma: no cover - optional path
             pass
         else:
-            mag = _spec_gpu(x_pad, win, hop, window=window, device=gpu_device)
-    elif use_cython and _HAS_CYTHON:
+            try:
+                mag = _spec_gpu(x_pad, win, hop, window=window, device=gpu_device)
+            except RuntimeError:
+                mag = None
+    if mag is None and use_cython and _HAS_CYTHON:
         mag = _spec_cy(x_pad, w, win, hop, n_frames)
-    elif use_numba and _HAS_NUMBA:
+    elif mag is None and use_numba and _HAS_NUMBA:
         frames = _spectrogram_frames(x_pad, win, hop, w, n_frames)
         fft = np.fft.rfft(frames, n=win, axis=1)
         mag = np.abs(fft).T
-    else:
+    elif mag is None:
         frames = frames * w[None, :]
         fft = np.fft.rfft(frames, n=win, axis=1)
         mag = np.abs(fft).T  # (F,T)

@@ -47,6 +47,8 @@ def gaf(
         n = x_cp.size
         out = cp.empty((n, n), dtype=cp.float64)
         if mem_limit is not None:
+            if mem_limit <= 0:
+                raise ValueError("mem_limit must be positive")
             row_bytes = n * 8
             rows = max(1, mem_limit // row_bytes)
             for start in range(0, n, rows):

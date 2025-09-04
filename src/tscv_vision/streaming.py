@@ -202,7 +202,10 @@ class StreamingEncoder:
                     elif self.encoder == "spectrogram":
                         kwargs["win"] = self.size
                         kwargs["hop"] = max(1, self.size // 4)
-                    return np.asarray(func(win, **kwargs))
+                    try:
+                        return np.asarray(func(win, **kwargs))
+                    except RuntimeError:
+                        pass
         if self.encode_fn is not None:
             return self.encode_fn(win)
         return _encode_window_static(

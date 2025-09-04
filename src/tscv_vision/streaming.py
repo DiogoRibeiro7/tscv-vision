@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import dataclass
 from itertools import islice
 from time import perf_counter
 from typing import Any, Literal
@@ -98,6 +99,10 @@ class StreamingEncoder:
     latency_threshold:
         Target seconds-per-window for ``"adaptive"`` precision. Exceeding this
         degrades precision; consistently staying below half upgrades precision.
+    gpu_device:
+        Optional GPU device index when ``use_gpu`` is ``True``.
+    gpu_mem_limit:
+        Optional byte limit for GPU encoders to control memory usage.
     """
 
     def __init__(
@@ -116,6 +121,8 @@ class StreamingEncoder:
         precision: Literal["high", "medium", "low", "adaptive"] = "high",
         latency_threshold: float = 0.01,
         encode_fn: Callable[[Array], Array] | None = None,
+        gpu_device: int | None = None,
+        gpu_mem_limit: int | None = None,
     ) -> None:
         if size <= 0:
             raise ValueError("size must be positive")
@@ -150,6 +157,8 @@ class StreamingEncoder:
         self.latency_threshold = latency_threshold
         self.encode_fn = encode_fn
         self._prev_first: float | None = None
+        self.gpu_device = gpu_device
+        self.gpu_mem_limit = gpu_mem_limit
 
     def _maybe_adapt(self) -> None:
         if self.adaptive is None:
@@ -179,16 +188,24 @@ class StreamingEncoder:
 
     def _encode(self, win: Array) -> Array:
         if self.use_gpu:
+            gpu_enc: Any | None
             try:
-                import cupy as cp
-            except Exception as exc:  # pragma: no cover - optional path
-                raise RuntimeError("CuPy is required for GPU acceleration") from exc
-            if self.encoder == "gaf":
-                w_cp = cp.asarray(win)
-                phi = cp.arccos(cp.clip(w_cp, -1.0, 1.0))
-                img = cp.cos(phi[:, None] + phi[None, :])
-                return np.asarray(cp.asnumpy(img), dtype=float)
-            # fallback to CPU for unsupported encoders
+                from .gpu import encoders as gpu_enc
+            except Exception:  # pragma: no cover - optional path
+                gpu_enc = None
+            if gpu_enc is not None:
+                func = getattr(gpu_enc, str(self.encoder), None)
+                if callable(func):
+                    kwargs: dict[str, object] = {"device": self.gpu_device}
+                    if self.encoder == "gaf":
+                        kwargs["mem_limit"] = self.gpu_mem_limit
+                    elif self.encoder == "spectrogram":
+                        kwargs["win"] = self.size
+                        kwargs["hop"] = max(1, self.size // 4)
+                    try:
+                        return np.asarray(func(win, **kwargs))
+                    except RuntimeError:
+                        pass
         if self.encode_fn is not None:
             return self.encode_fn(win)
         return _encode_window_static(
@@ -241,6 +258,191 @@ class StreamingEncoder:
         return outputs
 
 
+@dataclass
+class _SGDModel:
+    """Simple online linear regressor using stochastic gradient descent."""
+
+    n_features: int
+    lr: float = 0.01
+
+    def __post_init__(self) -> None:  # pragma: no cover - small init
+        self.weights = np.zeros(self.n_features)
+
+    def partial_fit(self, x: Array, y: float) -> None:
+        pred = float(self.predict(x))
+        err = pred - float(y)
+        self.weights -= self.lr * err * x
+
+    def predict(self, x: Array) -> float:
+        return float(np.dot(self.weights, x))
+
+    def get_state(self) -> Array:  # pragma: no cover - trivial
+        return self.weights.copy()
+
+    def set_state(self, state: Array) -> None:  # pragma: no cover - trivial
+        self.weights = state.copy()
+
+
+class OnlineLearner:
+    """Incremental model with concept drift detection and feature adaptation.
+
+    Parameters
+    ----------
+    window:
+        Number of recent samples used for feature computation.
+    feature_fn:
+        Function mapping the current window to a feature vector.
+    model:
+        Optional custom model implementing ``partial_fit(x, y)`` and
+        ``predict(x)``. Defaults to a simple linear regressor trained with
+        stochastic gradient descent.
+    drift_threshold:
+        Factor of baseline error that triggers a concept drift reset.
+    drift_window:
+        Number of recent errors considered when estimating drift.
+    var_threshold:
+        Minimum running variance required for a feature to remain active.
+    on_drift:
+        Optional callback invoked when concept drift is detected.
+    normalize:
+        If ``True`` features are standardized using running mean/std.
+    """
+
+    def __init__(
+        self,
+        *,
+        window: int = 1,
+        feature_fn: Callable[[Array], Array] | None = None,
+        model: Any | None = None,
+        drift_threshold: float = 5.0,
+        drift_window: int = 50,
+        var_threshold: float = 1e-6,
+        on_drift: Callable[[float], None] | None = None,
+        normalize: bool = True,
+    ) -> None:
+        if window <= 0:
+            raise ValueError("window must be positive")
+        self.window = window
+        self.feature_fn = feature_fn or (lambda w: w[-1:].copy())
+        self.model: Any | None = model
+        self.drift_threshold = drift_threshold
+        self.drift_window = drift_window
+        self.var_threshold = var_threshold
+        self.on_drift = on_drift
+        self.normalize = normalize
+        self._buf: deque[float] = deque(maxlen=window)
+        self._errors: deque[float] = deque(maxlen=drift_window)
+        self._baseline_err: float | None = None
+        self._feat_mean: Array | None = None
+        self._feat_m2: Array | None = None
+        self._feat_count = 0
+        self._active: NDArray[np.bool_] | None = None
+        self._versions: list[Array] = []
+        self._ab_model: Any | None = None
+        self._ab_ratio = 0.5
+        self._rng = np.random.default_rng()
+
+    @property
+    def selected_features(self) -> Sequence[int]:
+        if self._active is None:
+            return []
+        return list(np.nonzero(self._active)[0])
+
+    def _ensure_model(self, n_features: int) -> None:
+        if self.model is None:
+            self.model = _SGDModel(n_features)
+        else:
+            size = getattr(self.model, "weights", np.empty(0)).shape[0]
+            if size != n_features:
+                self.model = _SGDModel(n_features)
+
+    def _update_stats(self, feat: Array) -> Array:
+        if self._feat_mean is None:
+            self._feat_mean = np.zeros_like(feat)
+            self._feat_m2 = np.zeros_like(feat)
+        assert self._feat_m2 is not None and self._feat_mean is not None
+        self._feat_count += 1
+        delta = feat - self._feat_mean
+        self._feat_mean += delta / self._feat_count
+        self._feat_m2 += delta * (feat - self._feat_mean)
+        var = self._feat_m2 / max(1, self._feat_count - 1)
+        mask = var > self.var_threshold
+        if not np.any(mask):
+            mask = np.ones_like(mask, dtype=bool)
+        self._active = mask
+        if self.normalize:
+            std = np.sqrt(np.maximum(var[mask], 1e-12))
+            return np.asarray((feat[mask] - self._feat_mean[mask]) / std, dtype=float)
+        return np.asarray(feat[mask], dtype=float)
+
+    def _check_drift(self, err: float) -> None:
+        self._errors.append(err)
+        if len(self._errors) < self.drift_window:
+            return
+        mean_err = float(np.mean(self._errors))
+        if self._baseline_err is None:
+            self._baseline_err = mean_err
+            return
+        if mean_err > self.drift_threshold * self._baseline_err:
+            if self.on_drift is not None:
+                self.on_drift(mean_err)
+            self._baseline_err = None
+            self._errors.clear()
+            if self.model is not None:
+                state = getattr(self.model, "get_state", None)
+                if callable(state):
+                    self.model.set_state(np.zeros_like(state()))
+
+    def save_version(self) -> None:
+        if self.model is None:
+            return
+        state = getattr(self.model, "get_state", None)
+        if callable(state):
+            self._versions.append(state())
+
+    def rollback(self, idx: int = -1) -> None:
+        if not self._versions or self.model is None:
+            return
+        state = self._versions[idx]
+        self.model.set_state(state)
+
+    def set_ab_model(self, model: Any, ratio: float = 0.5) -> None:
+        self._ab_model = model
+        self._ab_ratio = float(np.clip(ratio, 0.0, 1.0))
+
+    def update(self, sample: float, target: float) -> float | None:
+        self._buf.append(float(sample))
+        if len(self._buf) < self.window:
+            return None
+        win = np.array(self._buf, dtype=float)
+        feat = self.feature_fn(win)
+        feat = self._update_stats(feat)
+        self._ensure_model(int(feat.size))
+        assert self.model is not None
+        pred = float(self.model.predict(feat))
+        self.model.partial_fit(feat, float(target))
+        self._check_drift(abs(pred - float(target)))
+        return pred
+
+    def predict(self, sample: float) -> float | None:
+        buf = self._buf.copy()
+        buf.append(float(sample))
+        if len(buf) < self.window:
+            return None
+        win = np.array(buf, dtype=float)
+        feat = self.feature_fn(win)
+        if self._active is not None:
+            assert self._feat_mean is not None and self._feat_m2 is not None
+            var = self._feat_m2 / max(1, self._feat_count - 1)
+            std = np.sqrt(np.maximum(var[self._active], 1e-12))
+            feat = (feat[self._active] - self._feat_mean[self._active]) / std
+        if self.model is None:
+            return None
+        if self._ab_model is not None and self._rng.random() < self._ab_ratio:
+            return float(self._ab_model.predict(feat))
+        return float(self.model.predict(feat))
+
+
 def kafka_stream(
     topic: str, bootstrap_servers: str, group_id: str | None = None
 ) -> Iterator[float]:
@@ -279,6 +481,24 @@ def redis_stream(key: str, host: str = "localhost", port: int = 6379) -> Iterato
                 yield float(fields[b"value"])
 
 
+def rabbitmq_stream(queue: str, url: str) -> Iterator[float]:
+    """Yield samples from a RabbitMQ queue.
+
+    Requires ``pika``; raises ``RuntimeError`` if not installed.
+    """
+
+    try:
+        import pika
+    except Exception as exc:  # pragma: no cover - optional path
+        raise RuntimeError("pika is required for rabbitmq_stream") from exc
+    params = pika.URLParameters(url)
+    connection = pika.BlockingConnection(params)
+    channel = connection.channel()
+    for method, _properties, body in channel.consume(queue):  # pragma: no cover - network
+        channel.basic_ack(method.delivery_tag)
+        yield float(body)
+
+
 def serve_websocket(*args: Any, **kwargs: Any) -> None:  # pragma: no cover - stub
     """Start a WebSocket server for real-time feature serving.
 
@@ -286,6 +506,15 @@ def serve_websocket(*args: Any, **kwargs: Any) -> None:  # pragma: no cover - st
     ``websockets`` package and asyncio event loop management.
     """
     raise NotImplementedError("WebSocket serving requires optional dependencies")
+
+
+def serve_rest(*args: Any, **kwargs: Any) -> None:  # pragma: no cover - stub
+    """Expose a REST API for real-time predictions.
+
+    A full implementation would rely on ``flask`` or ``fastapi`` which are
+    optional dependencies.
+    """
+    raise NotImplementedError("REST serving requires optional dependencies")
 
 
 def serve_grpc(*args: Any, **kwargs: Any) -> None:  # pragma: no cover - stub
@@ -300,9 +529,12 @@ __all__ = [
     "stream_windows",
     "online_encode",
     "StreamingEncoder",
+    "OnlineLearner",
     "kafka_stream",
     "redis_stream",
+    "rabbitmq_stream",
     "serve_websocket",
+    "serve_rest",
     "serve_grpc",
 ]
 

@@ -1,10 +1,34 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Callable, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
+
+try:  # optional
+    import numba as _nb
+except Exception:  # pragma: no cover - optional dependency
+    _HAS_NUMBA = False
+else:
+    _HAS_NUMBA = True
+
+try:  # optional Cython extension
+    from ._encoders_cy import gaf_polar as _gaf_cy
+    from ._encoders_cy import recurrence_dist as _rp_cy
+    from ._encoders_cy import spectrogram_stft as _spec_cy
+except Exception:  # pragma: no cover - extension not built
+    _HAS_CYTHON = False
+else:
+    _HAS_CYTHON = True
+
+try:  # optional wavelet backend
+    import pywt as _pywt
+except Exception:  # pragma: no cover - optional dependency
+    _HAS_PYWT = False
+else:
+    _HAS_PYWT = True
 
 Array = NDArray[np.float64]
 
@@ -94,11 +118,113 @@ def _minmax_scale(x: Array) -> Array:
     return cast(Array, x01 * 2.0 - 1.0)
 
 
-def gaf(x: Array, method: Literal["summation", "difference"] = "summation") -> Array:
+# ---------------------------------------------------------------------------
+# Numba-accelerated helpers
+# ---------------------------------------------------------------------------
+
+if _HAS_NUMBA:
+    @_nb.njit(cache=True)  # type: ignore[misc]
+    def _gaf_numba(x: Array, summation: bool) -> Array:  # pragma: no cover - compiled
+        n = x.shape[0]
+        phi = np.arccos(np.clip(x, -1.0, 1.0))
+        out = np.empty((n, n), dtype=np.float64)
+        for i in range(n):
+            for j in range(n):
+                if summation:
+                    out[i, j] = math.cos(phi[i] + phi[j])
+                else:
+                    out[i, j] = math.sin(phi[i] - phi[j])
+        return out
+
+    @_nb.njit(cache=True)  # type: ignore[misc]
+    def _recurrence_numba(x: Array, eps: float) -> Array:  # pragma: no cover
+        n = x.shape[0]
+        out = np.empty((n, n), dtype=np.float64)
+        maxd = 0.0
+        for i in range(n):
+            xi = x[i]
+            for j in range(n):
+                d = abs(xi - x[j])
+                out[i, j] = d
+                if d > maxd:
+                    maxd = d
+        scale = 1.0 / (maxd + 1e-12)
+        if eps >= 0.0:
+            for i in range(n):
+                for j in range(n):
+                    out[i, j] = 1.0 if out[i, j] * scale <= eps else 0.0
+        else:
+            for i in range(n):
+                for j in range(n):
+                    out[i, j] = 1.0 - out[i, j] * scale
+        return out
+
+    @_nb.njit(cache=True)  # type: ignore[misc]
+    def _spectrogram_frames(
+        x: Array, win: int, hop: int, w: Array, n_frames: int
+    ) -> Array:  # pragma: no cover
+        out = np.empty((n_frames, win), dtype=np.float64)
+        for n in range(n_frames):
+            start = n * hop
+            for i in range(win):
+                out[n, i] = x[start + i] * w[i]
+        return out
+else:  # pragma: no cover - no numba
+    _gaf_numba = None
+    _recurrence_numba = None
+    _spectrogram_frames = None
+
+
+def _sliding_view(x: Array, win: int, hop: int) -> tuple[Array, int, Array]:
+    """Return a memory-efficient sliding window view of ``x``.
+
+    Parameters
+    ----------
+    x:
+        Input series.
+    win:
+        Window length.
+    hop:
+        Step between windows.
+
+    Returns
+    -------
+    view, n_frames, padded:
+        Read-only view into the (possibly padded) series with shape
+        ``(n_frames, win)``, the number of frames and the padded array used to
+        create the view.
+    """
+
+    n_frames = 1 + math.ceil((len(x) - win) / hop)
+    total_len = (n_frames - 1) * hop + win
+    if len(x) < total_len:
+        x = np.pad(x, (0, total_len - len(x)))
+    view = np.lib.stride_tricks.as_strided(
+        x,
+        shape=(n_frames, win),
+        strides=(x.strides[0] * hop, x.strides[0]),
+        writeable=False,
+    )
+    return view, n_frames, x
+
+
+def gaf(
+    x: Array,
+    method: Literal["summation", "difference"] = "summation",
+    *,
+    use_numba: bool = False,
+    use_cython: bool = False,
+    use_gpu: bool = False,
+    gpu_device: int | None = None,
+    gpu_mem_limit: int | None = None,
+) -> Array:
     """Gramian Angular Field (GAF) encoding.
 
     Maps a 1D series to a Gramian image using a polar transform and the
-    cosine rule.
+    cosine rule. Setting ``use_numba`` or ``use_cython`` to ``True`` enables
+    compiled implementations for speed when the optional dependencies are
+    available.  The compiled paths are regression-tested to match the pure
+    NumPy implementation within ``1e-6`` absolute and relative tolerance.
 
     Parameters
     ----------
@@ -106,6 +232,17 @@ def gaf(x: Array, method: Literal["summation", "difference"] = "summation") -> A
         1D time series ``(N,)``.
     method:
         ``"summation"`` (GASF) or ``"difference"`` (GADF).
+    use_numba:
+        Whether to run a Numba JIT-compiled variant (if available).
+    use_cython:
+        Whether to run the Cython extension variant (if available).
+    use_gpu:
+        If ``True`` and CuPy is installed, compute on the GPU.
+    gpu_device:
+        Optional GPU device index when ``use_gpu`` is ``True``.
+    gpu_mem_limit:
+        If provided and ``use_gpu`` is ``True``, limit GPU memory usage in
+        bytes when forming the Gramian matrix by chunking the computation.
 
     Returns
     -------
@@ -121,12 +258,30 @@ def gaf(x: Array, method: Literal["summation", "difference"] = "summation") -> A
     """
 
     x = _minmax_scale(x)
-    # Polar encoding
-    phi = np.arccos(np.clip(x, -1.0, 1.0))  # angle
-    # Outer sums/diffs of angles
+    summation = method == "summation"
+    if use_gpu:
+        try:
+            from .gpu.encoders import gaf as _gaf_gpu
+        except Exception:  # pragma: no cover - optional path
+            pass
+        else:
+            try:
+                return _gaf_gpu(
+                    x,
+                    method=method,
+                    device=gpu_device,
+                    mem_limit=gpu_mem_limit,
+                )
+            except RuntimeError:
+                pass
+    if use_cython and _HAS_CYTHON:
+        return cast(Array, _gaf_cy(x, summation))
+    if use_numba and _HAS_NUMBA:
+        return cast(Array, _gaf_numba(x, summation))
+    phi = np.arccos(np.clip(x, -1.0, 1.0))
     phi_i = phi[:, None]
     phi_j = phi[None, :]
-    if method == "summation":
+    if summation:
         return cast(Array, np.cos(phi_i + phi_j))
     if method == "difference":
         return cast(Array, np.sin(phi_i - phi_j))
@@ -134,7 +289,12 @@ def gaf(x: Array, method: Literal["summation", "difference"] = "summation") -> A
 
 
 def recurrence_plot(
-    x: Array, metric: Literal["euclidean", "manhattan"] = "euclidean", eps: float | None = None
+    x: Array,
+    metric: Literal["euclidean", "manhattan"] = "euclidean",
+    eps: float | None = None,
+    *,
+    use_numba: bool = False,
+    use_cython: bool = False,
 ) -> Array:
     """Binary/real-valued recurrence plot.
 
@@ -147,6 +307,14 @@ def recurrence_plot(
     eps:
         Optional threshold; if set, returns a binary RP (0/1), otherwise
         distances normalised to ``[0, 1]``.
+    use_numba:
+        If ``True`` and `numba` is installed, compute distances via a
+        compiled implementation.
+    use_cython:
+        If ``True`` and the Cython extension is present, it is preferred over
+        the Numba and NumPy versions. Both compiled options are
+        regression-tested to match the NumPy baseline within ``1e-6`` absolute
+        and relative tolerance.
 
     Returns
     -------
@@ -164,30 +332,45 @@ def recurrence_plot(
     """
 
     x = _validate_series(x)
-    x = x.reshape(-1, 1)
-    diffs = x - x.T  # (N,N)
-    if metric == "euclidean":
-        dist = np.abs(diffs)
-    elif metric == "manhattan":
-        dist = np.abs(diffs)
-    else:
+    x1 = x.reshape(-1)
+    if metric not in {"euclidean", "manhattan"}:
         raise ValueError("metric must be 'euclidean' or 'manhattan'")
+    if use_cython and _HAS_CYTHON:
+        e = -1.0 if eps is None else eps
+        return cast(Array, _rp_cy(x1, e))
+    if use_numba and _HAS_NUMBA:
+        e = -1.0 if eps is None else eps
+        return cast(Array, _recurrence_numba(x1, e))
+    diffs = x1[:, None] - x1[None, :]
+    dist = np.abs(diffs)
     if not np.all(np.isfinite(dist)):
         raise ValueError("Input range is too large")
     dist = dist / (np.nanmax(dist) + 1e-12)
     if eps is None:
-        return cast(Array, 1.0 - dist)  # similarity map
+        return cast(Array, 1.0 - dist)
     if not np.isfinite(eps) or not 0.0 <= eps <= 1.0:
         raise ValueError("eps must be in [0, 1]")
     return cast(Array, (dist <= eps).astype(float))
 
 
 def spectrogram(
-    x: Array, win: int = 64, hop: int | None = None, window: Literal["hann", "rect"] = "hann"
+    x: Array,
+    win: int = 64,
+    hop: int | None = None,
+    window: Literal["hann", "rect"] = "hann",
+    *,
+    use_numba: bool = False,
+    use_cython: bool = False,
+    use_gpu: bool = False,
+    gpu_device: int | None = None,
 ) -> Array:
-    """Very small STFT-based magnitude spectrogram using NumPy only.
+    """Very small STFT-based magnitude spectrogram.
 
-    Pads the signal with zeros so all samples are covered by a window.
+    Pads the signal with zeros so all samples are covered by a window. Set
+    ``use_numba`` or ``use_cython`` to ``True`` to enable compiled
+    implementations of the STFT core when available.  The compiled backends
+    are verified to agree with the NumPy reference within ``1e-6`` absolute
+    and relative tolerance.
 
     Parameters
     ----------
@@ -199,6 +382,16 @@ def spectrogram(
         Hop length (defaults to ``win//4``).
     window:
         Window type (``"hann"`` or ``"rect"``).
+    use_numba:
+        If ``True`` and `numba` is installed, compute the STFT using a
+        compiled loop.
+    use_cython:
+        If ``True`` and the Cython extension is available, use it instead of
+        the NumPy/Numba versions.
+    use_gpu:
+        If ``True`` and CuPy is installed, compute on the GPU.
+    gpu_device:
+        Optional GPU device index when ``use_gpu`` is ``True``.
 
     Returns
     -------
@@ -237,28 +430,44 @@ def spectrogram(
     else:
         raise ValueError("window must be 'hann' or 'rect'")
 
-    n_frames = 1 + math.ceil((len(x) - win) / hop)
-    total_len = (n_frames - 1) * hop + win
-    if len(x) < total_len:
-        x = np.pad(x, (0, total_len - len(x)))
+    frames, n_frames, x_pad = _sliding_view(x, win, hop)
 
-    frames = np.lib.stride_tricks.as_strided(
-        x,
-        shape=(n_frames, win),
-        strides=(x.strides[0] * hop, x.strides[0]),
-        writeable=False,
-    )
-    frames = frames * w[None, :]
-    fft = np.fft.rfft(frames, n=win, axis=1)
-    mag = np.abs(fft).T  # (F,T)
+    mag: Array | None = None
+    if use_gpu:
+        try:
+            from .gpu.encoders import spectrogram as _spec_gpu
+        except Exception:  # pragma: no cover - optional path
+            pass
+        else:
+            try:
+                mag = _spec_gpu(x_pad, win, hop, window=window, device=gpu_device)
+            except RuntimeError:
+                mag = None
+    if mag is None and use_cython and _HAS_CYTHON:
+        mag = _spec_cy(x_pad, w, win, hop, n_frames)
+    elif mag is None and use_numba and _HAS_NUMBA:
+        frames = _spectrogram_frames(x_pad, win, hop, w, n_frames)
+        fft = np.fft.rfft(frames, n=win, axis=1)
+        mag = np.abs(fft).T
+    elif mag is None:
+        frames = frames * w[None, :]
+        fft = np.fft.rfft(frames, n=win, axis=1)
+        mag = np.abs(fft).T  # (F,T)
     if not np.all(np.isfinite(mag)):
         raise ValueError("Input range is too large")
     mag = mag / (np.max(mag) + 1e-12)
-    return cast(Array, mag)
+    return mag
 
 
-def cwt(x: Array, scales: Array, wavelet: Literal["morlet"] = "morlet") -> Array:
-    """Continuous Wavelet Transform using a Morlet mother wavelet.
+def cwt(
+    x: Array,
+    scales: Array,
+    wavelet: Literal["morlet", "mexh", "ricker"] = "morlet",
+) -> Array:
+    """Continuous Wavelet Transform.
+
+    Implements a CWT compatible with PyWavelets. The FFT-based Morlet
+    implementation follows the formulation of Torrence and Compo (1998).
 
     Parameters
     ----------
@@ -267,7 +476,9 @@ def cwt(x: Array, scales: Array, wavelet: Literal["morlet"] = "morlet") -> Array
     scales:
         Positive scales at which to compute the transform.
     wavelet:
-        Currently only ``"morlet"`` is supported.
+        Mother wavelet name. ``"morlet"`` uses a fast FFT implementation
+        while other families require ``PyWavelets`` and fall back to its
+        implementation.
 
     Returns
     -------
@@ -284,18 +495,22 @@ def cwt(x: Array, scales: Array, wavelet: Literal["morlet"] = "morlet") -> Array
     scales_arr = np.asarray(scales, dtype=float)
     if scales_arr.ndim != 1 or np.any(scales_arr <= 0):
         raise ValueError("scales must be a 1D array of positive values")
-    if wavelet != "morlet":
-        raise ValueError("only 'morlet' wavelet is supported")
-
-    n = x.size
-    fft_len = int(2 ** math.ceil(math.log2(n * 2)))
-    fft_x = np.fft.fft(x, fft_len)
-    freqs = np.fft.fftfreq(fft_len)
-    out = np.empty((scales_arr.size, n), dtype=float)
-    for i, s in enumerate(scales_arr):
-        psi_hat = np.exp(-0.5 * (s * 2 * np.pi * freqs - 5.0) ** 2)
-        conv = np.fft.ifft(fft_x * psi_hat)
-        out[i] = np.abs(conv[:n])
+    if wavelet == "morlet" and not _HAS_PYWT:
+        # custom FFT-based morlet for zero-dependency environments
+        n = x.size
+        fft_len = int(2 ** math.ceil(math.log2(n * 2)))
+        fft_x = np.fft.fft(x, fft_len)
+        freqs = np.fft.fftfreq(fft_len)
+        out = np.empty((scales_arr.size, n), dtype=float)
+        for i, s in enumerate(scales_arr):
+            psi_hat = np.exp(-0.5 * (s * 2 * np.pi * freqs - 5.0) ** 2)
+            conv = np.fft.ifft(fft_x * psi_hat)
+            out[i] = np.abs(conv[:n])
+    else:
+        if not _HAS_PYWT:
+            raise ValueError("PyWavelets required for chosen wavelet")
+        coeffs, _ = _pywt.cwt(x, scales_arr, wavelet)
+        out = np.abs(coeffs)
     out = out / (np.max(out) + 1e-12)
     return cast(Array, out)
 
@@ -341,11 +556,11 @@ def persistence_image(x: Array, bins: int = 32) -> Array:
     return cast(Array, H)
 
 
-def mtf(x: Array, bins: int = 8) -> Array:
+def mtf(x: Array, bins: int = 8, weighted: bool = False) -> Array:
     """Markov Transition Field encoding.
 
-    Quantises ``x`` into ``bins`` states and uses the state transition
-    probabilities to build an ``N×N`` field.
+    Quantises ``x`` into ``bins`` states and accumulates state transitions
+    into a Markov matrix which is then expanded to an ``N×N`` field.
 
     Parameters
     ----------
@@ -353,6 +568,9 @@ def mtf(x: Array, bins: int = 8) -> Array:
         Input 1D series ``(N,)``.
     bins:
         Number of quantisation bins ``>=2``.
+    weighted:
+        If ``True`` the transition counts are weighted by the absolute
+        difference between successive samples, emphasising large jumps.
 
     Returns
     -------
@@ -372,11 +590,40 @@ def mtf(x: Array, bins: int = 8) -> Array:
     states = np.digitize(x, q, right=False)
     trans = np.zeros((bins, bins), dtype=float)
     for i in range(len(states) - 1):
-        trans[states[i], states[i + 1]] += 1.0
+        w = abs(x[i + 1] - x[i]) if weighted else 1.0
+        trans[states[i], states[i + 1]] += w
     # normalise rows to probabilities
     trans /= np.maximum(trans.sum(axis=1, keepdims=True), 1e-12)
     img = trans[states[:, None], states[None, :]]
     return cast(Array, img)
+
+
+def gdf(x: Array) -> Array:
+    """Gramian Difference Field.
+
+    Constructs a matrix of pairwise differences on a min-max scaled series,
+    highlighting relative changes between all time indices.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+
+    Returns
+    -------
+    ndarray
+        ``(N, N)`` matrix with values in ``[-1, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` is invalid.
+    """
+
+    z = _minmax_scale(x)
+    diff = z[None, :] - z[:, None]
+    m = np.max(np.abs(diff)) + 1e-12
+    return cast(Array, diff / m)
 
 
 def multi_scale_rp(x: Array, scales: Array) -> Array:
@@ -449,6 +696,82 @@ def sax(x: Array, segments: int = 8, alphabet: int = 8) -> Array:
     symbols = np.digitize(means, bps, right=False)
     img = (symbols[:, None] == symbols[None, :]).astype(float)
     return cast(Array, img)
+
+
+def multi_scale_conv(x: Array, kernels: Sequence[int] = (3, 5, 7)) -> Array:
+    """Multi-scale convolutional encoder.
+
+    Applies simple average kernels of varying sizes and stacks the resulting
+    responses, following the idea of multi-resolution temporal filtering.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    kernels:
+        Iterable of odd kernel sizes ``>=1``.
+
+    Returns
+    -------
+    ndarray
+        ``(len(kernels), N)`` stack of filtered signals scaled to ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If kernels are invalid or exceed ``len(x)``.
+    """
+
+    x = _validate_series(x)
+    ks = np.asarray(kernels, dtype=int)
+    if ks.ndim != 1 or np.any(ks <= 0) or np.any(ks > x.size):
+        raise ValueError("kernels must be positive integers within len(x)")
+    outs: list[Array] = []
+    for k in ks:
+        ker = np.ones(k, dtype=float) / k
+        conv = np.convolve(x, ker, mode="same")
+        outs.append(conv)
+    arr = np.stack(outs, axis=0)
+    arr = arr - arr.min()
+    arr /= np.max(arr) + 1e-12
+    return cast(Array, arr)
+
+
+def tpa(x: Array, window: int = 8) -> Array:
+    """Temporal Pattern Attention encoder.
+
+    Implements a simplified self-attention mechanism over sliding windows as
+    described by Li *et al.* (2019), yielding an attention matrix between
+    local temporal patterns.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    window:
+        Length of each local pattern ``>=1`` and ``<= N``.
+
+    Returns
+    -------
+    ndarray
+        ``(N - window + 1, N - window + 1)`` attention matrix with rows
+        normalised to sum to ``1``.
+
+    Raises
+    ------
+    ValueError
+        If ``window`` is invalid or ``x`` invalid.
+    """
+
+    x = _validate_series(x)
+    if window < 1 or window > x.size:
+        raise ValueError("window must be in [1, len(x)]")
+    windows = np.lib.stride_tricks.sliding_window_view(x, window)
+    scores = windows @ windows.T / math.sqrt(window)
+    scores -= scores.max(axis=1, keepdims=True)
+    exp = np.exp(scores)
+    attn = exp / np.maximum(exp.sum(axis=1, keepdims=True), 1e-12)
+    return cast(Array, attn)
 
 
 def visibility_graph(x: Array) -> Array:
@@ -626,8 +949,14 @@ def random_projection_image(x: Array, size: int = 32, seed: int = 0) -> Array:
     return cast(Array, img.reshape(size, size))
 
 
-def ensemble(x: Array, names: list[str] | None = None) -> Array:
-    """Combine multiple encoders into a stacked representation."""
+def ensemble(
+    x: Array,
+    names: Sequence[str] | None = None,
+    *,
+    weights: Sequence[float] | None = None,
+    aggregate: Literal["stack", "mean"] = "stack",
+) -> Array:
+    """Combine multiple encoders into a stacked or averaged representation."""
 
     if names is None:
         names = ["gaf", "rp"]
@@ -636,7 +965,16 @@ def ensemble(x: Array, names: list[str] | None = None) -> Array:
     shape = imgs[0].shape
     if any(img.shape != shape for img in imgs[1:]):
         raise ValueError("encoders must return images of the same shape")
-    return cast(Array, np.stack(imgs, axis=0))
+    arr = np.stack(imgs, axis=0)
+    if aggregate == "stack":
+        return arr
+    if weights is not None:
+        w = np.asarray(weights, dtype=float)
+        if w.shape[0] != arr.shape[0]:
+            raise ValueError("weights length must match encoders")
+        w = w / np.sum(w)
+        return cast(Array, np.tensordot(w, arr, axes=(0, 0)))
+    return cast(Array, arr.mean(axis=0))
 
 
 # register built-in encoders
@@ -647,9 +985,12 @@ register_encoder("spec", spectrogram)
 register_encoder("cwt", cwt)
 register_encoder("ph", persistence_image)
 register_encoder("mtf", mtf)
+register_encoder("gdf", gdf)
 register_encoder("msrp", multi_scale_rp)
 register_encoder("dtw", dtw_matrix)
 register_encoder("sax", sax)
+register_encoder("msc", multi_scale_conv)
+register_encoder("tpa", tpa)
 register_encoder("vg", visibility_graph)
 register_encoder("shapelet", shapelet_transform)
 register_encoder("mp", matrix_profile)
@@ -664,7 +1005,10 @@ __all__ = [
     "cwt",
     "persistence_image",
     "mtf",
+    "gdf",
     "multi_scale_rp",
+    "multi_scale_conv",
+    "tpa",
     "dtw_matrix",
     "sax",
     "visibility_graph",

@@ -37,6 +37,12 @@ def test_ensemble_stack() -> None:
     assert img.shape == (2, 16, 16)
 
 
+def test_ensemble_mean() -> None:
+    x = np.sin(np.linspace(0, 1, 16))
+    img = encoders.ensemble(x, names=["gaf", "rp"], aggregate="mean")
+    assert img.shape == (16, 16)
+
+
 def test_persistence_image_shape() -> None:
     x = np.sin(np.linspace(0, 2 * np.pi, 64))
     img = encoders.persistence_image(x, bins=16)
@@ -86,4 +92,25 @@ def test_matrix_profile_shape_and_errors() -> None:
         encoders.matrix_profile(x, m=0)
     with pytest.raises(ValueError):
         encoders.matrix_profile(np.array([np.nan, 1.0, 2.0]), m=2)
+
+
+def test_gdf_range() -> None:
+    x = np.sin(np.linspace(0, 2 * np.pi, 16))
+    img = encoders.gdf(x)
+    assert img.shape == (16, 16)
+    assert np.all(img >= -1) and np.all(img <= 1)
+
+
+def test_multi_scale_conv_stack() -> None:
+    x = np.sin(np.linspace(0, 1, 32))
+    img = encoders.multi_scale_conv(x, kernels=[3, 5])
+    assert img.shape == (2, 32)
+
+
+def test_tpa_attention() -> None:
+    x = np.sin(np.linspace(0, 2 * np.pi, 32))
+    img = encoders.tpa(x, window=4)
+    assert img.shape == (29, 29)
+    row_sums = img.sum(axis=1)
+    assert np.allclose(row_sums, 1.0)
 

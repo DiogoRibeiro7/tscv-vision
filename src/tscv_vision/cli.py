@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import logging
 import sys
 from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -49,7 +50,8 @@ def main() -> None:
     examples = (
         "Examples:\n"
         "  tscv-features --encoders gaf --input x.npy --output out.npz\n"
-        "  tscv-features --encoders gaf --sliding --win-len 128 --hop 64 "
+        "  tscv-features --encoders gdf --input x.npy --output out.npz\n"
+        "  tscv-features --encoders msc,tpa --sliding --win-len 128 --hop 64 "
         "--input x.npy --output out.npz"
     )
     parser = argparse.ArgumentParser(
@@ -58,7 +60,11 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--config", default=None, help="JSON or YAML configuration file")
-    parser.add_argument("--encoders", default="gaf", help="Comma-separated encoder names")
+    parser.add_argument(
+        "--encoders",
+        default="gaf",
+        help="Comma-separated encoder names (e.g. gaf,rp,gdf,tpa,msc)",
+    )
     parser.add_argument("--input", nargs="+", required=True, help="Path(s) to .npy time series")
     parser.add_argument(
         "--output",
@@ -157,14 +163,16 @@ def main() -> None:
         with cfg_path.open() as fh:
             if cfg_path.suffix in {".yml", ".yaml"}:
                 try:
-                    import yaml  # type: ignore[import-untyped]
+                    yaml_mod = importlib.import_module("yaml")
                 except Exception as exc:  # pragma: no cover - optional dependency
                     raise ValueError("YAML config requires PyYAML") from exc
-                cfg = yaml.safe_load(fh) or {}
+                yaml = cast(Any, yaml_mod)
+                cfg_raw = yaml.safe_load(fh) or {}
             else:
-                cfg = json.load(fh)
-        if not isinstance(cfg, dict):
+                cfg_raw = json.load(fh)
+        if not isinstance(cfg_raw, dict):
             raise ValueError("Config file must define a mapping")
+        cfg: dict[str, Any] = cfg_raw
         parser.set_defaults(**cfg)
 
     args = parser.parse_args()

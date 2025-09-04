@@ -43,6 +43,32 @@ def test_cli_single(
     assert meta["encoders"] == ["gaf"]
 
 
+def test_cli_gdf(
+    tmp_path: Path, monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]
+) -> None:
+    x = np.sin(np.linspace(0.0, 2 * np.pi, 64))
+    in_path = tmp_path / "x.npy"
+    np.save(in_path, x)
+    out_path = tmp_path / "out.npz"
+    args = [
+        "tscv-features",
+        "--encoders",
+        "gdf",
+        "--input",
+        str(in_path),
+        "--output",
+        str(out_path),
+        "--features",
+        "intensity",
+    ]
+    monkeypatch.setattr(sys, "argv", args)
+    cli.main()
+    out = capsys.readouterr().out
+    assert "Saved features" in out
+    data = np.load(out_path)
+    assert data["features"].shape[0] == 6
+
+
 def test_cli_sliding_flags(
     tmp_path: Path, monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]
 ) -> None:

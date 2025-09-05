@@ -2,6 +2,12 @@
 
 This guide outlines best practices for deploying **tscv-vision** in production environments.
 
+## Pre‑deployment checks
+
+- Run the full test suite and linters.
+- Pin the library version in `requirements.txt` or `pyproject.toml`.
+- Record encoder configurations (window length, hop, bins) so that models are reproducible.
+
 ## Model versioning
 
 Use `ModelRegistry` to record encoder versions, performance metrics, and deployment status.
@@ -65,6 +71,13 @@ A sample `Dockerfile` is provided at the project root:
 docker build -t tscv-vision .
 ```
 
+Set the entrypoint to the CLI for quick feature extraction:
+
+```bash
+docker run --rm -v "$PWD:/data" tscv-vision \
+  tscv-features --encoder gaf --input /data/in.npy --output /data/out.npz
+```
+
 ## Kubernetes deployment
 
 A basic Kubernetes manifest lives under `k8s/feature-service.yaml`:
@@ -72,4 +85,8 @@ A basic Kubernetes manifest lives under `k8s/feature-service.yaml`:
 ```bash
 kubectl apply -f k8s/feature-service.yaml
 ```
+
+Configure resource limits and mount a persistent volume for feature outputs.
+Expose the service internally and secure ingress with your preferred mesh or
+API gateway.
 

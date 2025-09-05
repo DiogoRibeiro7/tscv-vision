@@ -33,3 +33,15 @@ Skip slow tests explicitly:
 ```bash
 poetry run pytest -m "not slow"
 ```
+
+Combine markers with logical expressions, e.g. run optional GPU tests:
+
+```bash
+poetry run pytest -m "gpu and optional"
+```
+
+Collect coverage information and show slowest tests:
+
+```bash
+poetry run pytest --cov=tscv_vision --durations=5
+```

@@ -42,7 +42,7 @@ poetry run pytest -q
 - `src/tscv_vision/sliding.py`: Implement `sliding_windows` and `encode_sliding`.
 - `src/tscv_vision/cli.py`: CLI entry point.
 - `tests/`: Unit tests for each module.
-- `samples/`: Example `.npy` files.
+- `samples/`: Scripts to generate example `.npy` files (no binaries tracked).
 
 ## Implementation Tasks
 
@@ -133,7 +133,7 @@ The agent must follow these rules strictly.
 
 src/tscv_vision/ **init**.py encoders.py # GAF/RP/Spectrogram features.py # Stats/Hist/Grad/LBP/compose sliding.py # sliding_windows, encode_sliding cli.py # tscv-features entrypoint
 
-samples/ README.md # how to create example .npy
+samples/ README.md # how to create example data
 
 tests/ test_smoke.py test_sliding.py
 

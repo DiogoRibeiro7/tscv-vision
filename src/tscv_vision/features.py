@@ -500,10 +500,8 @@ FEATURES_REGISTRY: dict[str, FeatureFunc] = {
     "fractal": _wrap_no_bins(fractal_dimension),
     "fft": _wrap_no_bins(fft_features),
     "psd": _wrap_no_bins(power_spectral_density),
+    "wavelet": _wrap_no_bins(wavelet_stats),
 }
-
-if pywt is not None:
-    FEATURES_REGISTRY["wavelet"] = _wrap_no_bins(wavelet_stats)
 
 
 def extract_feature_vector(
@@ -544,7 +542,12 @@ def extract_feature_vector(
     parts: list[Array] = []
     for ch in channels:
         for name in names:
-            parts.append(FEATURES_REGISTRY[name](ch, bins))
+            try:
+                parts.append(FEATURES_REGISTRY[name](ch, bins))
+            except ImportError:
+                if selected is not None and name in selected:
+                    raise
+                continue
     return np.concatenate(parts, dtype=float)
 
 

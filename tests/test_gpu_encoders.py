@@ -1,10 +1,12 @@
 import numpy as np
 import pytest
 
-pytest.importorskip("cupy")
-
 from tscv_vision import encoders
 from tscv_vision.gpu import encoders as gpu_enc
+
+cupy = pytest.importorskip("cupy")
+
+pytestmark = [pytest.mark.gpu, pytest.mark.optional]
 
 
 def test_gaf_gpu_matches_cpu():

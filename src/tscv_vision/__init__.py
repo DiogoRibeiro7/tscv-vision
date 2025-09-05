@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import importlib
 from types import ModuleType
-from typing import Any, cast
+from typing import Any
 
 __all__ = [
     "aggregation",
@@ -28,7 +28,6 @@ __all__ = [
     "mlops",
     "multimodal",
     "neural",
-    "nextgen",
     "parallel",
     "pipeline",
     "research",
@@ -46,22 +45,28 @@ def __getattr__(name: str) -> ModuleType | Any:  # pragma: no cover - exercised 
     """
 
     if name in __all__:
-        module = importlib.import_module(f".{name}", __name__)
+        module_name = name
+        attr_name: str | None = None
+        if name == "AutoTSCV":
+            module_name, attr_name = "automl", "AutoTSCV"
+        elif name == "WindowedDataset":
+            module_name, attr_name = "dataset", "WindowedDataset"
+        try:
+            module = importlib.import_module(f".{module_name}", __name__)
+        except ImportError as exc:
+            msg = (
+                f"Optional submodule '{module_name}' could not be imported. "
+                "Install the required extras to use this feature."
+            )
+            raise AttributeError(msg) from exc
+        if attr_name is not None:
+            obj = getattr(module, attr_name)
+            globals()[name] = obj
+            return obj
         globals()[name] = module
         return module
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-try:  # Optional export that may require extra dependencies
-    AutoTSCV = importlib.import_module(".automl", __name__).AutoTSCV
-except Exception:  # pragma: no cover - optional
-    AutoTSCV = cast(Any, None)
-
-try:
-    WindowedDataset = importlib.import_module(".dataset", __name__).WindowedDataset
-except Exception:  # pragma: no cover - optional
-    WindowedDataset = cast(Any, None)
-
-
-__version__ = "0.10.0"
+__version__ = "0.1.1"
 

@@ -16,3 +16,9 @@ Thumbs.db
 
 # VSCode
 .vscode/
+
+# Sample outputs
+samples/*.npz
+samples/*.npy
+src/tscv_vision/_encoders_cy*.so
+dist/

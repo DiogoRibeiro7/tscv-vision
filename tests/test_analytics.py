@@ -1,8 +1,5 @@
-import matplotlib
 import numpy as np
 import pytest
-
-matplotlib.use("Agg")
 
 from tscv_vision.analytics import (
     TSHAPExplainer,
@@ -12,6 +9,11 @@ from tscv_vision.analytics import (
     rp_attribution,
     spectrogram_attribution,
 )
+
+matplotlib = pytest.importorskip("matplotlib")
+matplotlib.use("Agg")
+
+pytestmark = pytest.mark.optional
 
 
 def test_tshap_explainer_shapes_and_errors() -> None:

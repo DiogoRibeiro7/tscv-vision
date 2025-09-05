@@ -6,14 +6,24 @@ from __future__ import annotations
 import pickle
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from sklearn.feature_selection import mutual_info_classif
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import KFold, cross_val_score
+
+try:  # optional dependency
+    from sklearn.feature_selection import mutual_info_classif
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from sklearn.gaussian_process.kernels import Matern
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import KFold, cross_val_score
+except Exception:  # pragma: no cover - optional dependency
+    mutual_info_classif = cast(Any, None)
+    GaussianProcessRegressor = cast(Any, None)
+    Matern = cast(Any, None)
+    LogisticRegression = cast(Any, None)
+    KFold = cast(Any, None)
+    cross_val_score = cast(Any, None)
 
 from .encoders import ENCODER_REGISTRY, get_encoder
 from .features import extract_feature_vector
@@ -83,11 +93,15 @@ def select_features(
     rng = np.random.default_rng(random_state)
 
     if method == "mutual_info":
+        if mutual_info_classif is None:
+            raise ImportError("scikit-learn required for mutual_info method")
         scores = mutual_info_classif(X, y, random_state=random_state)
     elif method == "correlation":
         corr = np.corrcoef(X, y, rowvar=False)
         scores = np.abs(corr[:-1, -1])
     elif method == "stability":
+        if mutual_info_classif is None or KFold is None:
+            raise ImportError("scikit-learn required for stability selection")
         counts = np.zeros(X.shape[1], dtype=float)
         kf = KFold(n_splits=cv, shuffle=True, random_state=random_state)
         for train, _ in kf.split(X):
@@ -143,6 +157,8 @@ class AdaptivePipeline:
     def fit(self, X: Array, y: Array) -> AdaptivePipeline:
         X = _validate_dataset(X)
         y = _validate_target(y, X.shape[0])
+        if LogisticRegression is None or cross_val_score is None:
+            raise ImportError("scikit-learn required for AdaptivePipeline")
         best_score = -np.inf
         best_name = self.encoders[0]
         for name in self.encoders:
@@ -214,6 +230,13 @@ class AdaptivePipeline:
         ks = np.arange(5, min(50, n_features) + 1, 5)
         configs: list[list[float]] = []
         scores: list[float] = []
+        if (
+            GaussianProcessRegressor is None
+            or Matern is None
+            or LogisticRegression is None
+            or cross_val_score is None
+        ):
+            raise ImportError("scikit-learn required for optimization")
         gp = GaussianProcessRegressor(kernel=Matern(nu=2.5), random_state=self.random_state)
         rng = np.random.default_rng(self.random_state)
         for _ in range(max(2, n_iter)):
@@ -289,6 +312,8 @@ class FeatureEnsemble:
     def fit(self, X: Array, y: Array) -> FeatureEnsemble:
         X = _validate_dataset(X)
         y = _validate_target(y, X.shape[0])
+        if LogisticRegression is None or cross_val_score is None:
+            raise ImportError("scikit-learn required for FeatureEnsemble")
         scores: list[float] = []
         for name in self.encoders:
             feats = self._extract_all(X, name)

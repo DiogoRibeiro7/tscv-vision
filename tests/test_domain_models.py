@@ -1,4 +1,7 @@
 import numpy as np
+import pytest
+
+pytest.importorskip("sklearn")
 
 from tscv_vision.domains import (
     DomainAdapter,
@@ -8,6 +11,8 @@ from tscv_vision.domains import (
     healthcare,
     uncertainty_sampling,
 )
+
+pytestmark = pytest.mark.optional
 
 
 def test_domain_adapter_and_metrics() -> None:

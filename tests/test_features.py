@@ -29,9 +29,12 @@ def test_lbp_constant() -> None:
 def test_extract_feature_vector() -> None:
     img = np.arange(16, dtype=float).reshape(4, 4)
     vec = features.extract_feature_vector(img, bins=8)
-    expected = sum(
-        features.FEATURES_REGISTRY[name](img, bins=8).size for name in features.FEATURES_REGISTRY
-    )
+    expected = 0
+    for func in features.FEATURES_REGISTRY.values():
+        try:
+            expected += func(img, bins=8).size
+        except ImportError:
+            continue
     assert vec.shape == (expected,)
 
 
@@ -39,9 +42,12 @@ def test_extract_feature_vector_multichannel() -> None:
     base = np.arange(16, dtype=float).reshape(4, 4)
     img = np.stack([base, base * 0], axis=-1)
     vec = features.extract_feature_vector(img, bins=8)
-    per_ch = sum(
-        features.FEATURES_REGISTRY[name](base, bins=8).size for name in features.FEATURES_REGISTRY
-    )
+    per_ch = 0
+    for func in features.FEATURES_REGISTRY.values():
+        try:
+            per_ch += func(base, bins=8).size
+        except ImportError:
+            continue
     assert vec.shape[0] == 2 * per_ch
 
 

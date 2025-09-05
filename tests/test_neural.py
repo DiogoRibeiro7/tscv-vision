@@ -13,6 +13,8 @@ from tscv_vision.neural import (
 
 torch = pytest.importorskip("torch")
 
+pytestmark = pytest.mark.optional
+
 
 def test_cnn_encoder_outputs_vector() -> None:
     enc = TorchCNNEncoder()

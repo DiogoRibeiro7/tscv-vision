@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import Callable, Literal, cast
+from typing import Any, Callable, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 try:  # optional
     import numba as _nb
 except Exception:  # pragma: no cover - optional dependency
+    _nb = cast(Any, None)
     _HAS_NUMBA = False
 else:
     _HAS_NUMBA = True
@@ -19,6 +20,9 @@ try:  # optional Cython extension
     from ._encoders_cy import recurrence_dist as _rp_cy
     from ._encoders_cy import spectrogram_stft as _spec_cy
 except Exception:  # pragma: no cover - extension not built
+    _gaf_cy = cast(Any, None)
+    _rp_cy = cast(Any, None)
+    _spec_cy = cast(Any, None)
     _HAS_CYTHON = False
 else:
     _HAS_CYTHON = True
@@ -996,6 +1000,11 @@ register_encoder("shapelet", shapelet_transform)
 register_encoder("mp", matrix_profile)
 register_encoder("randproj", random_projection_image)
 register_encoder("ensemble", ensemble)
+
+# aliases matching documentation
+register_encoder("visibility_graph", visibility_graph)
+register_encoder("matrix_profile", matrix_profile)
+register_encoder("persistence_image", persistence_image)
 
 
 __all__ = [

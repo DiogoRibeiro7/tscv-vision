@@ -138,11 +138,13 @@ fi
 # ---------------------------
 # Smoke CLI (optional, not failing build)
 # ---------------------------
+python samples/generate.py >/dev/null 2>&1 || true
 if [[ -f samples/sine.npy ]]; then
-  log "Smoke: extracting features from samples/sine.npy"
+  log "Smoke: extracting features from generated samples/sine.npy"
   set +e
   poetry run tscv-features --encoder gaf --input samples/sine.npy --output /tmp/feats.npz --bins 16
   set -e
+  rm samples/sine.npy
 fi
 
 log "Setup complete. You can start developing now."

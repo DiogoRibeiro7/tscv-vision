@@ -1,8 +1,13 @@
 import numpy as np
+import pytest
+
+pytest.importorskip("sklearn")
 
 from tscv_vision.benchmark import benchmark_pipeline, benchmark_streaming
 from tscv_vision.pipeline import AdaptivePipeline
 from tscv_vision.streaming import StreamingEncoder
+
+pytestmark = pytest.mark.optional
 
 
 def test_benchmark_metrics() -> None:

@@ -25,10 +25,12 @@ def test_extract_batch_multichannel() -> None:
     imgs = np.stack([img, img], axis=0)
     batch = features.extract_batch(imgs, bins=8)
     assert batch.shape[0] == 2
-    per_ch = sum(
-        features.FEATURES_REGISTRY[name](img[..., 0], bins=8).size
-        for name in features.FEATURES_REGISTRY
-    )
+    per_ch = 0
+    for func in features.FEATURES_REGISTRY.values():
+        try:
+            per_ch += func(img[..., 0], bins=8).size
+        except ImportError:
+            continue
     assert batch.shape[1] == 2 * per_ch
 
 

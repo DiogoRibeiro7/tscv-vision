@@ -62,3 +62,24 @@ def augment_dropout(signal: Array, drop_prob: float = 0.1, *, seed: int = 0) -> 
     mask = rng.random(sig.shape) < drop_prob
     sig[mask] = 0.0
     return sig
+
+
+def iot_features(signal: Array) -> Array:
+    """Return basic statistics for an IoT signal.
+
+    Parameters
+    ----------
+    signal : Array
+        1D input sequence.
+
+    Returns
+    -------
+    Array
+        ``[mean, std, min, max]`` of the signal.
+    """
+
+    sig = np.asarray(signal, dtype=float)
+    if sig.ndim != 1:
+        raise ValueError("signal must be 1D")
+    stats = [sig.mean(), sig.std(), sig.min(), sig.max()]
+    return cast(Array, np.array(stats, dtype=float))

@@ -10,6 +10,8 @@ from tscv_vision.ml_integration import (
     to_onnx_tensor,
 )
 
+pytestmark = pytest.mark.optional
+
 
 def _sample_series(n: int = 32) -> np.ndarray:
     t = np.linspace(0, 2 * np.pi, n)

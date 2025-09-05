@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
@@ -153,6 +154,20 @@ class StreamingEncoder:
         self.incremental = incremental
         self._last_encoded: Array | None = None
         self.use_gpu = use_gpu
+        self._gpu_enc: Any | None = None
+        if use_gpu:
+            try:
+                from .gpu import encoders as _gpu_enc
+                _gpu_enc._require_cupy()
+            except Exception:
+                warnings.warn(
+                    "CuPy not available; falling back to CPU",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                self.use_gpu = False
+            else:
+                self._gpu_enc = _gpu_enc
         self.precision = precision
         self.latency_threshold = latency_threshold
         self.encode_fn = encode_fn
@@ -187,25 +202,19 @@ class StreamingEncoder:
         self.dtype = levels[self._precision_level]
 
     def _encode(self, win: Array) -> Array:
-        if self.use_gpu:
-            gpu_enc: Any | None
-            try:
-                from .gpu import encoders as gpu_enc
-            except Exception:  # pragma: no cover - optional path
-                gpu_enc = None
-            if gpu_enc is not None:
-                func = getattr(gpu_enc, str(self.encoder), None)
-                if callable(func):
-                    kwargs: dict[str, object] = {"device": self.gpu_device}
-                    if self.encoder == "gaf":
-                        kwargs["mem_limit"] = self.gpu_mem_limit
-                    elif self.encoder == "spectrogram":
-                        kwargs["win"] = self.size
-                        kwargs["hop"] = max(1, self.size // 4)
-                    try:
-                        return np.asarray(func(win, **kwargs))
-                    except RuntimeError:
-                        pass
+        if self.use_gpu and self._gpu_enc is not None:
+            func = getattr(self._gpu_enc, str(self.encoder), None)
+            if callable(func):
+                kwargs: dict[str, object] = {"device": self.gpu_device}
+                if self.encoder == "gaf":
+                    kwargs["mem_limit"] = self.gpu_mem_limit
+                elif self.encoder == "spectrogram":
+                    kwargs["win"] = self.size
+                    kwargs["hop"] = max(1, self.size // 4)
+                try:
+                    return np.asarray(func(win, **kwargs))
+                except RuntimeError:
+                    pass
         if self.encode_fn is not None:
             return self.encode_fn(win)
         return _encode_window_static(

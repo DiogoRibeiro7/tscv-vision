@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from numpy.typing import NDArray
 
 from tscv_vision.streaming import StreamingEncoder
@@ -59,9 +58,9 @@ def test_incremental_update() -> None:
 
 def test_gpu_missing() -> None:
     enc = StreamingEncoder(size=4, use_gpu=True)
-    with pytest.raises(RuntimeError):
-        for i in range(4):
-            enc.push(float(i))
+    for i in range(4):
+        enc.push(float(i))
+    assert not enc.use_gpu
 
 
 def test_adaptive_precision() -> None:

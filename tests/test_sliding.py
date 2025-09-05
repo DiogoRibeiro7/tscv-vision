@@ -23,7 +23,10 @@ def test_encode_sliding_rp() -> None:
 
 def test_features_for_sliding() -> None:
     x = np.sin(np.linspace(0.0, 6 * np.pi, 180))
-    feats, starts = features_for_sliding(x, encoder="gaf", size=60, hop=30, bins=8)
+    sel = ["intensity", "hist", "gradient", "lbp"]
+    feats, starts = features_for_sliding(
+        x, encoder="gaf", size=60, hop=30, bins=8, feature_names=sel
+    )
     assert feats.shape[0] == starts.shape[0]
     assert feats.shape[1] == 6 + 8 + 16 + 256
 

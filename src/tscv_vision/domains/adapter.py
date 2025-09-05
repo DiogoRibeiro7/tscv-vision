@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Callable
+from typing import Any, Callable, cast
 
 import numpy as np
 from numpy.typing import NDArray
 
-try:
+try:  # optional dependency
     from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-except Exception as exc:  # pragma: no cover - handled at runtime
-    raise ImportError("scikit-learn is required for domain adaptation") from exc
+    from sklearn.metrics import (
+        accuracy_score,
+        f1_score,
+        precision_score,
+        recall_score,
+    )
+except Exception:  # pragma: no cover - optional
+    LogisticRegression = cast(Any, None)
+    accuracy_score = cast(Any, None)
+    f1_score = cast(Any, None)
+    precision_score = cast(Any, None)
+    recall_score = cast(Any, None)
 
 Array = NDArray[np.float64]
 IntArray = NDArray[np.int_]
@@ -42,6 +51,8 @@ class DomainAdapter:
         extractor: Extractor,
         base_estimator: LogisticRegression | None = None,
     ) -> None:
+        if LogisticRegression is None:
+            raise ImportError("scikit-learn is required for DomainAdapter")
         self.extractor = extractor
         self.model = base_estimator or LogisticRegression(max_iter=100, warm_start=True)
 
@@ -65,6 +76,13 @@ class DomainAdapter:
 
 def classification_metrics(y_true: Array, y_pred: Array) -> dict[str, float]:
     """Compute accuracy, precision, recall and F1 metrics."""
+    if (
+        accuracy_score is None
+        or precision_score is None
+        or recall_score is None
+        or f1_score is None
+    ):
+        raise ImportError("scikit-learn is required for classification_metrics")
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "precision": float(precision_score(y_true, y_pred, average="macro")),

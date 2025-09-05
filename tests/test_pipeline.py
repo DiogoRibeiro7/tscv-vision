@@ -1,7 +1,12 @@
 import numpy as np
+import pytest
+
+pytest.importorskip("sklearn")
 
 from tscv_vision import encoders
 from tscv_vision.pipeline import AdaptivePipeline, FeatureEnsemble, select_features
+
+pytestmark = pytest.mark.optional
 
 
 def _sum_encoder(x: np.ndarray) -> np.ndarray:

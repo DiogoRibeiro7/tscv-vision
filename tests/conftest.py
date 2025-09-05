@@ -7,6 +7,7 @@ hanging CI jobs. The timeout can be adjusted by setting the
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import signal
 from collections.abc import Iterator
@@ -34,3 +35,35 @@ def timeout_guard() -> Iterator[None]:
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old)
+
+
+def _has_pkg(name: str) -> bool:
+    return importlib.util.find_spec(name) is not None
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Skip marked tests when optional deps are missing."""
+
+    if "gpu" in item.keywords and not _has_pkg("cupy"):
+        pytest.skip("requires CuPy")
+
+
+@pytest.fixture
+def torch_module() -> object:
+    """Provide the torch module if installed."""
+
+    return pytest.importorskip("torch")
+
+
+@pytest.fixture
+def cupy_module() -> object:
+    """Provide the cupy module if installed."""
+
+    return pytest.importorskip("cupy")
+
+
+@pytest.fixture
+def sklearn_module() -> object:
+    """Provide the scikit-learn module if installed."""
+
+    return pytest.importorskip("sklearn")

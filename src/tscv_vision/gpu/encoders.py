@@ -17,7 +17,9 @@ Array = NDArray[np.float64]
 
 def _require_cupy() -> None:
     if cp is None:  # pragma: no cover - checked at runtime
-        raise RuntimeError("CuPy is required for GPU acceleration")
+        raise RuntimeError(
+            "CuPy is required for GPU acceleration. Install with 'pip install tscv-vision[gpu]'."
+        )
 
 
 def memory_usage(device: int | None = None) -> tuple[int, int]:

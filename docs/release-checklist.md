@@ -6,6 +6,16 @@
 - `poetry run pytest -q`
 - `./scripts/integration.sh`
 
+## Versioning
+- Update `pyproject.toml` and `CHANGELOG.md`
+- Commit with `build: release vX.Y.Z`
+- Tag the commit: `git tag vX.Y.Z && git push --tags`
+
+## Documentation
+- Regenerate README examples and ensure links are valid
+- Proofread files under `docs/`
+- Ensure new flags are documented in `README.md` and `docs/api.md`
+
 ## Optional dependencies
 - `cli`: YAML configuration (`pyyaml`)
 - `analytics`: advanced analytics and visualization (`scikit-learn`, `shap`, `lime`, `umap-learn`, `matplotlib`, `seaborn`, `pywavelets`)

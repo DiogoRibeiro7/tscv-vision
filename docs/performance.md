@@ -17,6 +17,22 @@ Setting ``use_gpu=True`` enables optional CuPy-powered versions of certain
 encoders (currently the Gramian Angular Field). If CuPy is not installed a
 ``RuntimeError`` is raised.
 
+## Parallelism
+
+Many batch helpers accept a `parallel` argument controlling worker processes.
+Keep it below the number of physical cores to avoid oversubscription. For
+I/O‑bound workloads the CLI can stream from disk using multiple workers.
+
+## Memory mapping
+
+Large `.npy` files can be accessed with `np.memmap` to avoid loading the entire
+array into memory:
+
+```python
+import numpy as np
+series = np.load("huge.npy", mmap_mode="r")
+```
+
 ## Adaptive Precision
 
 The ``precision`` parameter controls the output data type. ``"adaptive"`` mode
@@ -57,4 +73,7 @@ stats = benchmark_pipeline(pipe, X)
 
 Only ``throughput`` and ``latency`` are reported since memory usage depends on
 the encoder implementations.
+
+For deeper inspection use the standard library's ``cProfile`` or external tools
+such as ``perf`` to capture hotspots and cache misses.
 

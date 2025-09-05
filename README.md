@@ -133,9 +133,28 @@ poetry run pytest -q
 
 Install them via extras, for example: `pip install tscv-vision[gpu,cli]`.
 
+## Documentation
+
+Further guides live under the `docs/` directory:
+
+- [API reference](docs/api.md) – function signatures, shapes, and optional analytics tools
+- [Deployment](docs/deployment.md) – container builds, Kubernetes manifests, and runtime safety
+- [Performance](docs/performance.md) – streaming tips, GPU usage, and benchmarking helpers
+- [Release checklist](docs/release-checklist.md) – versioning and packaging steps
+- [Test matrix](docs/test-matrix.md) – pytest markers and dependency combinations
+- [Troubleshooting](docs/troubleshooting.md) – common errors and their fixes
+
 ## Sample data
 
 Generate a demo sine wave with `python samples/generate.py`. See `samples/README.md` for details.
+
+## Maintainer
+
+Diogo Ribeiro  
+ESMAD – Instituto Politécnico do Porto  
+GitHub: [@DiogoRibeiro7](https://github.com/DiogoRibeiro7)  
+ORCID: [0009-0001-2022-7072](https://orcid.org/0009-0001-2022-7072)  
+Email: dfr@esmad.ipp.pt
 
 ## License
 

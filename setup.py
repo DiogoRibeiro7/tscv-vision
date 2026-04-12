@@ -22,7 +22,7 @@ if USE_CYTHON:
 
 setup(
     name="tscv-vision",
-    version="0.10.0",
+    version="0.1.1",
     description="Computer-vision feature engineering for 1D time series (NumPy-first).",
     author="Diogo Ribeiro",
     author_email="dfr@esmad.ipp.pt",

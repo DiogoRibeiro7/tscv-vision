@@ -8,6 +8,14 @@ from numpy.typing import NDArray
 Array = NDArray[np.float64]
 RHYTHM_WEIGHTS: Array = np.ones(13) / 13
 
+__all__ = [
+    "mfcc_features",
+    "rhythm_score",
+    "generate_tone",
+    "augment_time_shift",
+    "RHYTHM_WEIGHTS",
+]
+
 
 def _dct(x: Array) -> Array:
     """Compute a Type-II DCT using FFT symmetry."""

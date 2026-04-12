@@ -49,7 +49,13 @@ def intensity_stats(img: Array) -> Array:
 
     Returns
     -------
-    Array of shape ``(6,)``.
+    ndarray
+        Array of shape ``(6,)``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
     """
 
     if img.ndim != 2:
@@ -78,7 +84,13 @@ def histogram(img: Array, bins: int = 32) -> Array:
 
     Returns
     -------
-    Array of shape ``(bins,)``.
+    ndarray
+        Array of shape ``(bins,)``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
     """
 
     if img.ndim != 2:
@@ -95,7 +107,25 @@ def histogram(img: Array, bins: int = 32) -> Array:
 
 
 def gradient_histogram(img: Array, bins: int = 16) -> Array:
-    """Histogram of gradient magnitudes using Sobel filters."""
+    """Histogram of gradient magnitudes using Sobel filters.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    bins:
+        Number of histogram bins.
+
+    Returns
+    -------
+    ndarray
+        Normalized histogram of shape ``(bins,)``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
@@ -136,7 +166,25 @@ def _lbp_codes(img: Array, radius: int) -> np.ndarray:
 
 
 def lbp(img: Array, radius: int = 1) -> Array:
-    """Local Binary Pattern histogram (256 bins)."""
+    """Local Binary Pattern histogram (256 bins).
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    radius:
+        Neighbourhood radius for the LBP operator.
+
+    Returns
+    -------
+    ndarray
+        Normalized histogram of shape ``(256,)``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     codes = _lbp_codes(img, radius)
     h, _ = np.histogram(codes.ravel(), bins=256, range=(0, 256), density=True)
@@ -158,7 +206,25 @@ _LBP_RI_MAP = _lbp_rotation_map()
 
 
 def lbp_ri(img: Array, radius: int = 1) -> Array:
-    """Rotation-invariant Local Binary Pattern histogram (256 bins)."""
+    """Rotation-invariant Local Binary Pattern histogram (256 bins).
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    radius:
+        Neighbourhood radius for the LBP operator.
+
+    Returns
+    -------
+    ndarray
+        Normalized histogram of shape ``(256,)``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     codes = _lbp_codes(img, radius)
     ri = _LBP_RI_MAP[codes]
@@ -182,7 +248,28 @@ _LBP_UNI_MAP, _LBP_UNI_BINS = _lbp_uniform_map()
 
 
 def lbp_uniform(img: Array, radius: int = 1) -> Array:
-    """Uniform LBP histogram (``_LBP_UNI_BINS`` bins)."""
+    """Uniform LBP histogram.
+
+    Only patterns with at most two 0-1 transitions are counted as
+    individual bins; all others share a single non-uniform bin.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    radius:
+        Neighbourhood radius for the LBP operator.
+
+    Returns
+    -------
+    ndarray
+        Normalized histogram of shape ``(_LBP_UNI_BINS,)``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     codes = _lbp_codes(img, radius)
     uni = _LBP_UNI_MAP[codes]
@@ -281,7 +368,26 @@ def gabor_features(
 
 
 def edge_density(img: Array, threshold: float | None = None) -> Array:
-    """Proportion of edge pixels based on gradient magnitude."""
+    """Proportion of edge pixels based on gradient magnitude.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    threshold:
+        Gradient magnitude above which a pixel is counted as an edge.
+        Defaults to the mean magnitude.
+
+    Returns
+    -------
+    ndarray
+        Scalar array of shape ``(1,)`` with the edge ratio in ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
@@ -295,7 +401,25 @@ def edge_density(img: Array, threshold: float | None = None) -> Array:
 
 
 def orientation_histogram(img: Array, bins: int = 16) -> Array:
-    """Histogram of gradient orientations in ``[0, 2π)``."""
+    """Histogram of gradient orientations in ``[0, 2pi)``.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    bins:
+        Number of orientation bins.
+
+    Returns
+    -------
+    ndarray
+        Normalized histogram of shape ``(bins,)``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
@@ -307,7 +431,26 @@ def orientation_histogram(img: Array, bins: int = 16) -> Array:
 
 
 def contour_ratio(img: Array, threshold: float | None = None) -> Array:
-    """Edge area ratio within its bounding box as a simple shape descriptor."""
+    """Edge area ratio within its bounding box as a simple shape descriptor.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    threshold:
+        Gradient magnitude threshold for edge detection.
+        Defaults to the mean magnitude.
+
+    Returns
+    -------
+    ndarray
+        Scalar array of shape ``(1,)`` with the ratio in ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
@@ -329,7 +472,26 @@ def contour_ratio(img: Array, threshold: float | None = None) -> Array:
 
 
 def fractal_dimension(img: Array, threshold: float = 0.5) -> Array:
-    """Estimate fractal dimension via box counting."""
+    """Estimate fractal dimension via box counting.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+    threshold:
+        Binarisation threshold (applied after min-max scaling to
+        ``[0, 1]``).
+
+    Returns
+    -------
+    ndarray
+        Scalar array of shape ``(1,)`` with the estimated dimension.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
@@ -361,7 +523,24 @@ def fractal_dimension(img: Array, threshold: float = 0.5) -> Array:
 
 
 def fft_features(img: Array) -> Array:
-    """Mean and std of 2D FFT magnitude and phase."""
+    """Mean and std of 2D FFT magnitude and phase.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+
+    Returns
+    -------
+    ndarray
+        Array of shape ``(4,)`` containing ``[mag_mean, mag_std,
+        phase_mean, phase_std]``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
@@ -400,7 +579,23 @@ def wavelet_stats(img: Array, wavelet: str = "db1") -> Array:
 
 
 def power_spectral_density(img: Array) -> Array:
-    """Mean and std of power spectral density."""
+    """Mean and std of power spectral density.
+
+    Parameters
+    ----------
+    img:
+        2D image array.
+
+    Returns
+    -------
+    ndarray
+        Array of shape ``(2,)`` containing ``[psd_mean, psd_std]``.
+
+    Raises
+    ------
+    ValueError
+        If ``img`` is not 2D.
+    """
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
@@ -624,7 +819,26 @@ def extract_batch(
 
 
 def scale_features(X: Array, method: Literal["zscore", "minmax"] = "zscore") -> Array:
-    """Normalize features with ``zscore`` or ``minmax`` scaling."""
+    """Normalize features with ``zscore`` or ``minmax`` scaling.
+
+    Parameters
+    ----------
+    X:
+        2D feature matrix of shape ``(n_samples, n_features)``.
+    method:
+        ``"zscore"`` subtracts the mean and divides by std;
+        ``"minmax"`` scales each column to ``[0, 1]``.
+
+    Returns
+    -------
+    ndarray
+        Scaled array with the same shape as ``X``.
+
+    Raises
+    ------
+    ValueError
+        If ``X`` is not 2D or ``method`` is unknown.
+    """
 
     if X.ndim != 2:
         raise ValueError("X must be 2D")
@@ -645,7 +859,30 @@ def rank_features(
     y: Array | None = None,
     method: Literal["variance", "mutual_info"] = "variance",
 ) -> np.ndarray:
-    """Return feature indices sorted by importance."""
+    """Return feature indices sorted by descending importance.
+
+    Parameters
+    ----------
+    X:
+        2D feature matrix of shape ``(n_samples, n_features)``.
+    y:
+        Target labels, required when ``method="mutual_info"``.
+    method:
+        ``"variance"`` ranks by column variance; ``"mutual_info"``
+        uses sklearn's mutual information classifier.
+
+    Returns
+    -------
+    ndarray
+        Integer index array of shape ``(n_features,)`` ordered from
+        most to least important.
+
+    Raises
+    ------
+    ValueError
+        If ``X`` is not 2D, ``method`` is unknown, or ``y`` is missing
+        for ``"mutual_info"``.
+    """
 
     if X.ndim != 2:
         raise ValueError("X must be 2D")
@@ -670,7 +907,30 @@ def select_top_k(
     y: Array | None = None,
     method: Literal["variance", "mutual_info"] = "variance",
 ) -> Array:
-    """Select top-``k`` features according to ``method``."""
+    """Select the top-``k`` features according to ``method``.
+
+    Parameters
+    ----------
+    X:
+        2D feature matrix of shape ``(n_samples, n_features)``.
+    k:
+        Number of features to keep (must be positive and at most
+        ``n_features``).
+    y:
+        Target labels, required when ``method="mutual_info"``.
+    method:
+        Ranking criterion forwarded to :func:`rank_features`.
+
+    Returns
+    -------
+    ndarray
+        Reduced matrix of shape ``(n_samples, k)``.
+
+    Raises
+    ------
+    ValueError
+        If ``k`` is non-positive or exceeds the number of features.
+    """
 
     if k <= 0:
         raise ValueError("k must be positive")

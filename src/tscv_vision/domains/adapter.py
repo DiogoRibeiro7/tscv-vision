@@ -25,6 +25,13 @@ Array = NDArray[np.float64]
 IntArray = NDArray[np.int_]
 Extractor = Callable[[Array], Array]
 
+__all__ = [
+    "DomainAdapter",
+    "PrototypicalClassifier",
+    "classification_metrics",
+    "uncertainty_sampling",
+]
+
 
 class DomainAdapter:
     """Fine-tune a pre-trained feature extractor for a specific domain.

@@ -8,6 +8,14 @@ from numpy.typing import NDArray
 Array = NDArray[np.float64]
 VARIABLE_STAR_THRESHOLD = 0.1
 
+__all__ = [
+    "periodicity_features",
+    "variable_star_score",
+    "generate_light_curve",
+    "augment_noise",
+    "VARIABLE_STAR_THRESHOLD",
+]
+
 
 def periodicity_features(signal: Array, fs: float = 1.0) -> Array:
     """Return dominant frequency and its amplitude."""

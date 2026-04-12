@@ -10,6 +10,14 @@ Array = NDArray[np.float64]
 # Coefficients for a toy arrhythmia risk model: intercept, SDNN weight
 ARRHYTHMIA_COEFFS: Array = np.array([-1.0, 2.0])
 
+__all__ = [
+    "ecg_features",
+    "arrhythmia_risk",
+    "generate_ecg",
+    "augment_noise",
+    "ARRHYTHMIA_COEFFS",
+]
+
 
 def ecg_features(signal: Array, fs: float = 250.0) -> Array:
     """Extract simple heart-rate and variability features from ECG signal.

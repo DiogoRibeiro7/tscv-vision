@@ -1,5 +1,4 @@
 """Utilities for integrating :mod:`tscv-vision` into ML pipelines."""
-# mypy: ignore-errors
 
 from __future__ import annotations
 
@@ -14,21 +13,21 @@ from .sliding import features_for_sliding
 Array = NDArray[np.float64]
 
 if TYPE_CHECKING:  # pragma: no cover - import for type check only
-    import tensorflow as tf  # type: ignore
-    from onnx import TensorProto  # type: ignore
-    from sklearn.base import BaseEstimator, TransformerMixin  # type: ignore
+    import tensorflow as tf
+    from onnx import TensorProto
+    from sklearn.base import BaseEstimator, TransformerMixin
 else:  # pragma: no cover - runtime fallback
-    class BaseEstimator:  # type: ignore[too-many-ancestors]
-        pass
+    class BaseEstimator:  # type: ignore[no-redef]
+        """Stub base class when sklearn is not installed."""
 
-    class TransformerMixin:  # type: ignore[too-many-ancestors]
-        pass
+    class TransformerMixin:  # type: ignore[no-redef]
+        """Stub mixin when sklearn is not installed."""
 
-    tf = None  # type: ignore
-    TensorProto = Any  # type: ignore
+    tf = None
+    TensorProto = Any  # type: ignore[misc]
 
 
-class SklearnFeatureTransformer(TransformerMixin, BaseEstimator):
+class SklearnFeatureTransformer(TransformerMixin, BaseEstimator):  # type: ignore[misc]
     """scikit-learn transformer that extracts features from time series.
 
     Parameters
@@ -86,7 +85,7 @@ class TorchFeatureDataset:  # pragma: no cover - small wrapper
         feature_names: Sequence[str] | None = None,
     ) -> None:
         try:
-            import torch.utils.data as data  # type: ignore
+            import torch.utils.data as data
         except Exception as exc:  # pragma: no cover - import error
             raise ImportError("torch is required for TorchFeatureDataset") from exc
         self._data_module = data
@@ -98,7 +97,7 @@ class TorchFeatureDataset:  # pragma: no cover - small wrapper
     def __len__(self) -> int:
         return int(self.series.shape[0])
 
-    def __getitem__(self, idx: int) -> Array:
+    def __getitem__(self, idx: int) -> Any:
         row = self.series[idx]
         f, _ = features_for_sliding(
             row,
@@ -120,7 +119,7 @@ def tf_feature_dataset(
 ) -> Any:  # pragma: no cover - requires tensorflow
     """Build a ``tf.data.Dataset`` yielding feature vectors."""
     try:
-        import tensorflow as _tf  # type: ignore
+        import tensorflow as _tf
     except Exception as exc:  # pragma: no cover - import error
         raise ImportError("tensorflow is required for tf_feature_dataset") from exc
 

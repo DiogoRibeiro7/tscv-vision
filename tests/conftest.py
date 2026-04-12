@@ -21,7 +21,7 @@ _DEFAULT_TIMEOUT = int(os.environ.get("TSVISION_TEST_TIMEOUT", "60"))
 def timeout_guard() -> Iterator[None]:
     """Abort tests exceeding the global timeout."""
 
-    if _DEFAULT_TIMEOUT <= 0:
+    if _DEFAULT_TIMEOUT <= 0 or not hasattr(signal, "SIGALRM"):
         yield
         return
 

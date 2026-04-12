@@ -12,6 +12,16 @@ Array = NDArray[np.float64]
 FUSION_WEIGHTS: Array = np.array([0.5, 0.5])
 ANOMALY_THRESHOLD = 3.0
 
+__all__ = [
+    "fuse_sensors",
+    "anomaly_score",
+    "generate_sensor_series",
+    "augment_dropout",
+    "iot_features",
+    "FUSION_WEIGHTS",
+    "ANOMALY_THRESHOLD",
+]
+
 
 def fuse_sensors(sensors: Array, weights: Array | None = None) -> Array:
     """Fuse multiple sensors via weighted average.

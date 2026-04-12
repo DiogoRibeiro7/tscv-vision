@@ -36,6 +36,8 @@ else:
 
 Array = NDArray[np.float64]
 
+NanPolicy = Literal["raise", "omit", "interpolate", "forward_fill"]
+
 EncoderFunc = Callable[..., Array]
 ENCODER_REGISTRY: dict[str, EncoderFunc] = {}
 
@@ -66,18 +68,85 @@ def get_encoder(name: str) -> EncoderFunc:
     return ENCODER_REGISTRY[name]
 
 
-def _validate_series(x: Array) -> Array:
+def _handle_nans(x: Array, policy: NanPolicy) -> Array:
+    """Apply ``policy`` to non-finite values in ``x``.
+
+    Parameters
+    ----------
+    x:
+        1D float array (already cast).
+    policy:
+        ``"raise"`` raises on any non-finite value, ``"omit"`` drops them,
+        ``"interpolate"`` fills gaps via linear interpolation, and
+        ``"forward_fill"`` carries the last valid observation forward (then
+        backward for leading gaps).
+
+    Returns
+    -------
+    ndarray
+        Cleaned 1D array.
+    """
+
+    mask = ~np.isfinite(x)
+    if not np.any(mask):
+        return x
+    if policy == "raise":
+        raise ValueError("x contains NaN or infinite values")
+    if policy == "omit":
+        x = x[~mask]
+        if x.size == 0:
+            raise ValueError("x is empty after removing non-finite values")
+        return x
+    if policy == "interpolate":
+        good = np.where(~mask)[0]
+        if good.size == 0:
+            raise ValueError("x contains no finite values to interpolate")
+        x = x.copy()
+        x[mask] = np.interp(np.where(mask)[0], good, x[good])
+        return x
+    if policy == "forward_fill":
+        x = x.copy()
+        good = np.where(~mask)[0]
+        if good.size == 0:
+            raise ValueError("x contains no finite values to forward-fill")
+        # forward fill
+        for i in range(x.size):
+            if mask[i]:
+                if i > 0:
+                    x[i] = x[i - 1]
+        # backward fill remaining leading NaNs
+        remaining = ~np.isfinite(x)
+        if np.any(remaining):
+            first_valid = np.argmax(~remaining)
+            x[:first_valid] = x[first_valid]
+        return x
+    raise ValueError(
+        f"nan_policy must be 'raise', 'omit', 'interpolate', or "
+        f"'forward_fill', got {policy!r}"
+    )
+
+
+def _validate_series(
+    x: Array,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
     """Return ``x`` as a 1D ``float64`` array after validation.
 
     Parameters
     ----------
     x:
         Input array.
+    nan_policy:
+        How to handle NaN and infinite values.  ``"raise"`` (default)
+        rejects them, ``"omit"`` removes them, ``"interpolate"`` fills
+        gaps via linear interpolation, and ``"forward_fill"`` propagates
+        the last valid observation.
 
     Raises
     ------
     ValueError
-        If ``x`` is not 1D, empty or contains NaN/inf values.
+        If ``x`` is not 1D, empty, or contains non-finite values when
+        ``nan_policy="raise"``.
     """
 
     x = np.asarray(x, dtype=float)
@@ -85,12 +154,14 @@ def _validate_series(x: Array) -> Array:
         raise ValueError("x must be a 1D array")
     if x.size == 0:
         raise ValueError("x cannot be empty")
-    if not np.all(np.isfinite(x)):
-        raise ValueError("x contains NaN or infinite values")
+    x = _handle_nans(x, nan_policy)
     return x
 
 
-def _minmax_scale(x: Array) -> Array:
+def _minmax_scale(
+    x: Array,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
     """Scale a validated series to ``[-1, 1]``.
 
     Adds a small epsilon to avoid zero division.
@@ -99,6 +170,8 @@ def _minmax_scale(x: Array) -> Array:
     ----------
     x:
         1D time series.
+    nan_policy:
+        Forwarded to :func:`_validate_series`.
 
     Returns
     -------
@@ -111,7 +184,7 @@ def _minmax_scale(x: Array) -> Array:
         If the dynamic range of ``x`` is not finite.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     xmin, xmax = x.min(), x.max()
     span = xmax - xmin
     if not np.isfinite(span):
@@ -216,6 +289,7 @@ def gaf(
     x: Array,
     method: Literal["summation", "difference"] = "summation",
     *,
+    nan_policy: NanPolicy = "raise",
     use_numba: bool = False,
     use_cython: bool = False,
     use_gpu: bool = False,
@@ -261,7 +335,7 @@ def gaf(
         If ``method`` is not one of ``{"summation", "difference"}``.
     """
 
-    x = _minmax_scale(x)
+    x = _minmax_scale(x, nan_policy=nan_policy)
     summation = method == "summation"
     if use_gpu:
         try:
@@ -297,6 +371,7 @@ def recurrence_plot(
     metric: Literal["euclidean", "manhattan"] = "euclidean",
     eps: float | None = None,
     *,
+    nan_policy: NanPolicy = "raise",
     use_numba: bool = False,
     use_cython: bool = False,
 ) -> Array:
@@ -335,7 +410,7 @@ def recurrence_plot(
         If ``eps`` is provided and is not finite or outside ``[0, 1]``.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     x1 = x.reshape(-1)
     if metric not in {"euclidean", "manhattan"}:
         raise ValueError("metric must be 'euclidean' or 'manhattan'")
@@ -363,6 +438,7 @@ def spectrogram(
     hop: int | None = None,
     window: Literal["hann", "rect"] = "hann",
     *,
+    nan_policy: NanPolicy = "raise",
     use_numba: bool = False,
     use_cython: bool = False,
     use_gpu: bool = False,
@@ -416,7 +492,7 @@ def spectrogram(
     ValueError
         If ``window`` is not ``'hann'`` or ``'rect'``.
     """
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     if hop is None:
         hop = max(1, win // 4)
     if win < 8:
@@ -467,6 +543,8 @@ def cwt(
     x: Array,
     scales: Array,
     wavelet: Literal["morlet", "mexh", "ricker"] = "morlet",
+    *,
+    nan_policy: NanPolicy = "raise",
 ) -> Array:
     """Continuous Wavelet Transform.
 
@@ -495,7 +573,7 @@ def cwt(
         If ``scales`` are invalid or ``wavelet`` unsupported.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     scales_arr = np.asarray(scales, dtype=float)
     if scales_arr.ndim != 1 or np.any(scales_arr <= 0):
         raise ValueError("scales must be a 1D array of positive values")
@@ -519,7 +597,7 @@ def cwt(
     return cast(Array, out)
 
 
-def persistence_image(x: Array, bins: int = 32) -> Array:
+def persistence_image(x: Array, bins: int = 32, *, nan_policy: NanPolicy = "raise") -> Array:
     """Simple persistence diagram histogram.
 
     Approximates 0D persistent homology by pairing consecutive extrema and
@@ -543,7 +621,7 @@ def persistence_image(x: Array, bins: int = 32) -> Array:
         If ``bins`` is not positive or ``x`` invalid.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     if bins < 1:
         raise ValueError("bins must be >= 1")
     dx = np.diff(x)
@@ -560,7 +638,13 @@ def persistence_image(x: Array, bins: int = 32) -> Array:
     return cast(Array, H)
 
 
-def mtf(x: Array, bins: int = 8, weighted: bool = False) -> Array:
+def mtf(
+    x: Array,
+    bins: int = 8,
+    weighted: bool = False,
+    *,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
     """Markov Transition Field encoding.
 
     Quantises ``x`` into ``bins`` states and accumulates state transitions
@@ -587,7 +671,7 @@ def mtf(x: Array, bins: int = 8, weighted: bool = False) -> Array:
         If ``bins < 2`` or ``x`` is invalid.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     if bins < 2:
         raise ValueError("bins must be >= 2")
     q = np.quantile(x, np.linspace(0, 1, bins + 1)[1:-1])
@@ -602,7 +686,7 @@ def mtf(x: Array, bins: int = 8, weighted: bool = False) -> Array:
     return cast(Array, img)
 
 
-def gdf(x: Array) -> Array:
+def gdf(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     """Gramian Difference Field.
 
     Constructs a matrix of pairwise differences on a min-max scaled series,
@@ -624,13 +708,13 @@ def gdf(x: Array) -> Array:
         If ``x`` is invalid.
     """
 
-    z = _minmax_scale(x)
+    z = _minmax_scale(x, nan_policy=nan_policy)
     diff = z[None, :] - z[:, None]
     m = np.max(np.abs(diff)) + 1e-12
     return cast(Array, diff / m)
 
 
-def multi_scale_rp(x: Array, scales: Array) -> Array:
+def multi_scale_rp(x: Array, scales: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     """Multi-scale Recurrence Plot.
 
     Computes recurrence plots on downsampled versions of ``x`` and upsamples
@@ -654,7 +738,7 @@ def multi_scale_rp(x: Array, scales: Array) -> Array:
         If ``scales`` are invalid or exceed ``len(x)``.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     s = np.asarray(scales, dtype=int)
     if s.ndim != 1 or np.any(s <= 0):
         raise ValueError("scales must be a 1D array of positive integers")
@@ -669,10 +753,10 @@ def multi_scale_rp(x: Array, scales: Array) -> Array:
     return cast(Array, np.stack(rps, axis=0))
 
 
-def dtw_matrix(x: Array) -> Array:
+def dtw_matrix(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     """Dynamic Time Warping cost matrix."""
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     n = x.size
     cost = np.empty((n, n), dtype=float)
     cost[0, 0] = 0.0
@@ -688,10 +772,16 @@ def dtw_matrix(x: Array) -> Array:
     return cast(Array, 1.0 - cost)
 
 
-def sax(x: Array, segments: int = 8, alphabet: int = 8) -> Array:
+def sax(
+    x: Array,
+    segments: int = 8,
+    alphabet: int = 8,
+    *,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
     """Symbolic Aggregate approXimation image."""
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     if segments <= 0 or alphabet < 2:
         raise ValueError("invalid segments or alphabet")
     segs = np.array_split(x, segments)
@@ -702,7 +792,12 @@ def sax(x: Array, segments: int = 8, alphabet: int = 8) -> Array:
     return cast(Array, img)
 
 
-def multi_scale_conv(x: Array, kernels: Sequence[int] = (3, 5, 7)) -> Array:
+def multi_scale_conv(
+    x: Array,
+    kernels: Sequence[int] = (3, 5, 7),
+    *,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
     """Multi-scale convolutional encoder.
 
     Applies simple average kernels of varying sizes and stacks the resulting
@@ -726,7 +821,7 @@ def multi_scale_conv(x: Array, kernels: Sequence[int] = (3, 5, 7)) -> Array:
         If kernels are invalid or exceed ``len(x)``.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     ks = np.asarray(kernels, dtype=int)
     if ks.ndim != 1 or np.any(ks <= 0) or np.any(ks > x.size):
         raise ValueError("kernels must be positive integers within len(x)")
@@ -741,7 +836,7 @@ def multi_scale_conv(x: Array, kernels: Sequence[int] = (3, 5, 7)) -> Array:
     return cast(Array, arr)
 
 
-def tpa(x: Array, window: int = 8) -> Array:
+def tpa(x: Array, window: int = 8, *, nan_policy: NanPolicy = "raise") -> Array:
     """Temporal Pattern Attention encoder.
 
     Implements a simplified self-attention mechanism over sliding windows as
@@ -767,7 +862,7 @@ def tpa(x: Array, window: int = 8) -> Array:
         If ``window`` is invalid or ``x`` invalid.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     if window < 1 or window > x.size:
         raise ValueError("window must be in [1, len(x)]")
     windows = np.lib.stride_tricks.sliding_window_view(x, window)
@@ -778,7 +873,7 @@ def tpa(x: Array, window: int = 8) -> Array:
     return cast(Array, attn)
 
 
-def visibility_graph(x: Array) -> Array:
+def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     """Natural visibility graph adjacency matrix.
 
     Parameters
@@ -803,7 +898,7 @@ def visibility_graph(x: Array) -> Array:
     (3, 3)
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     n = x.size
     adj = np.zeros((n, n), dtype=float)
     for i in range(n):
@@ -821,7 +916,12 @@ def visibility_graph(x: Array) -> Array:
 
 
 def shapelet_transform(
-    x: Array, k: int = 3, length: int | None = None, seed: int | None = None
+    x: Array,
+    k: int = 3,
+    length: int | None = None,
+    seed: int | None = None,
+    *,
+    nan_policy: NanPolicy = "raise",
 ) -> Array:
     """Distance maps to randomly sampled shapelets.
 
@@ -853,7 +953,7 @@ def shapelet_transform(
     (2, 16)
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     n = x.size
     if k < 1:
         raise ValueError("k must be >= 1")
@@ -873,7 +973,7 @@ def shapelet_transform(
     return cast(Array, dists)
 
 
-def matrix_profile(x: Array, m: int) -> Array:
+def matrix_profile(x: Array, m: int, *, nan_policy: NanPolicy = "raise") -> Array:
     """Naive matrix profile for motif/discord discovery.
 
     Parameters
@@ -900,7 +1000,7 @@ def matrix_profile(x: Array, m: int) -> Array:
     (29,)
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     n = x.size
     if m < 2 or m > n:
         raise ValueError("m must be in [2, len(x)]")
@@ -921,7 +1021,13 @@ def matrix_profile(x: Array, m: int) -> Array:
     return cast(Array, profile)
 
 
-def random_projection_image(x: Array, size: int = 32, seed: int = 0) -> Array:
+def random_projection_image(
+    x: Array,
+    size: int = 32,
+    seed: int = 0,
+    *,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
     """Random projection encoder producing a 2D image.
 
     Parameters
@@ -944,7 +1050,7 @@ def random_projection_image(x: Array, size: int = 32, seed: int = 0) -> Array:
         If ``size`` is not positive.
     """
 
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     if size <= 0:
         raise ValueError("size must be positive")
     rng = np.random.default_rng(seed)
@@ -957,6 +1063,7 @@ def ensemble(
     x: Array,
     names: Sequence[str] | None = None,
     *,
+    nan_policy: NanPolicy = "raise",
     weights: Sequence[float] | None = None,
     aggregate: Literal["stack", "mean"] = "stack",
 ) -> Array:
@@ -964,7 +1071,7 @@ def ensemble(
 
     if names is None:
         names = ["gaf", "rp"]
-    x = _validate_series(x)
+    x = _validate_series(x, nan_policy=nan_policy)
     imgs = [get_encoder(n)(x) for n in names]
     shape = imgs[0].shape
     if any(img.shape != shape for img in imgs[1:]):
@@ -1027,6 +1134,8 @@ __all__ = [
     "ensemble",
     "register_encoder",
     "get_encoder",
+    "ENCODER_REGISTRY",
+    "NanPolicy",
 ]
 
 

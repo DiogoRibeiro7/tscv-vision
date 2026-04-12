@@ -8,6 +8,14 @@ from numpy.typing import NDArray
 Array = NDArray[np.float64]
 EXTREME_THRESHOLD = 3.0
 
+__all__ = [
+    "seasonal_trend_features",
+    "extreme_event_score",
+    "generate_temperature_series",
+    "augment_regime_shift",
+    "EXTREME_THRESHOLD",
+]
+
 
 def seasonal_trend_features(series: Array, period: int) -> Array:
     """Compute seasonal variance, trend slope, and extreme deviation."""

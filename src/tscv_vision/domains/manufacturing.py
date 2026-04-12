@@ -8,6 +8,14 @@ from numpy.typing import NDArray
 Array = NDArray[np.float64]
 QUALITY_WEIGHTS: Array = np.array([0.5, 0.3, 0.2])
 
+__all__ = [
+    "vibration_features",
+    "quality_score",
+    "generate_vibration_series",
+    "augment_spike",
+    "QUALITY_WEIGHTS",
+]
+
 
 def vibration_features(signal: Array) -> Array:
     """Compute RMS, peak and kurtosis of a vibration signal."""

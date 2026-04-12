@@ -10,6 +10,15 @@ Array = NDArray[np.float64]
 # Simple pre-trained logistic model coefficients for regime detection
 REGIME_COEFFS: Array = np.array([0.0, 50.0])
 
+__all__ = [
+    "microstructure_features",
+    "volatility_clustering",
+    "detect_regime",
+    "generate_price_series",
+    "augment_regime_switch",
+    "REGIME_COEFFS",
+]
+
 
 def microstructure_features(prices: Array) -> Array:
     """Compute basic market microstructure features.

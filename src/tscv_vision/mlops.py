@@ -11,10 +11,10 @@ import hashlib
 import logging
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from math import erfc, sqrt
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -307,7 +307,7 @@ def create_feature_service() -> FastAPI:  # pragma: no cover - requires fastapi
         counter = None
 
     @app.post("/extract")  # type: ignore[misc]
-    def extract(data: list[float] = Body(...)) -> dict[str, Any]:  # noqa: B008
+    def extract(data: list[float] = Body(..., embed=True)) -> dict[str, Any]:  # noqa: B008
         arr = np.asarray(data, dtype=float)
         if arr.ndim != 1 or arr.size < 2:
             raise HTTPException(status_code=400, detail="series must be 1D with >=2 samples")
@@ -363,8 +363,8 @@ def create_monitoring_app(
 
     @app.post("/drift")  # type: ignore[misc]
     def drift(
-        baseline: list[float] = Body(...),  # noqa: B008
-        current: list[float] = Body(...),  # noqa: B008
+        baseline: list[float] = Body(..., embed=True),  # noqa: B008
+        current: list[float] = Body(..., embed=True),  # noqa: B008
     ) -> dict[str, bool]:
         base_arr = np.asarray(baseline, dtype=float)
         cur_arr = np.asarray(current, dtype=float)
@@ -374,7 +374,7 @@ def create_monitoring_app(
         return {"drift": bool(has_drift)}
 
     @app.post("/quality")  # type: ignore[misc]
-    def quality(score: float = Body(...)) -> dict[str, float]:  # noqa: B008
+    def quality(score: float = Body(..., embed=True)) -> dict[str, float]:  # noqa: B008
         if quality_gauge is not None:
             quality_gauge.set(score)
         return {"score": float(score)}

@@ -334,7 +334,7 @@ class FeatureEnsemble:
             raise ValueError("Ensemble must be fitted first")
         X = _validate_dataset(X)
         feats = []
-        for w, name in zip(self.weights_, self.encoders):
+        for w, name in zip(self.weights_, self.encoders, strict=True):
             f = self._extract_all(X, name)
             feats.append(w * f)
         return np.hstack(feats)

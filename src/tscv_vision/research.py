@@ -65,7 +65,7 @@ def track_experiment(
 
     path = Path(dataset)
     data_hash = hashlib.sha256(path.read_bytes()).hexdigest()
-    timestamp = _dt.datetime.utcnow().isoformat()
+    timestamp = _dt.datetime.now(_dt.timezone.utc).isoformat()
     record = {
         "timestamp": timestamp,
         "dataset": str(path),

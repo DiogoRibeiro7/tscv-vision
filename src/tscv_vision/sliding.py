@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from functools import partial
-from typing import Callable, Literal, cast, overload
+from typing import Literal, cast, overload
 
 import numpy as np
 from numpy.typing import NDArray

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
-from typing import Any, Callable, Literal, cast
+from collections.abc import Callable, Sequence
+from typing import Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -577,6 +577,9 @@ def cwt(
     scales_arr = np.asarray(scales, dtype=float)
     if scales_arr.ndim != 1 or np.any(scales_arr <= 0):
         raise ValueError("scales must be a 1D array of positive values")
+    # Map user-facing names to pywt equivalents (pywt >= 1.6 uses "morl")
+    _PYWT_NAMES: dict[str, str] = {"morlet": "morl", "ricker": "mexh"}
+
     if wavelet == "morlet" and not _HAS_PYWT:
         # custom FFT-based morlet for zero-dependency environments
         n = x.size
@@ -591,7 +594,8 @@ def cwt(
     else:
         if not _HAS_PYWT:
             raise ValueError("PyWavelets required for chosen wavelet")
-        coeffs, _ = _pywt.cwt(x, scales_arr, wavelet)
+        pywt_name = _PYWT_NAMES.get(wavelet, wavelet)
+        coeffs, _ = _pywt.cwt(x, scales_arr, pywt_name)
         out = np.abs(coeffs)
     out = out / (np.max(out) + 1e-12)
     return cast(Array, out)
@@ -901,17 +905,18 @@ def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     x = _validate_series(x, nan_policy=nan_policy)
     n = x.size
     adj = np.zeros((n, n), dtype=float)
-    for i in range(n):
-        for j in range(i + 1, n):
-            yi, yj = x[i], x[j]
-            ks = slice(i + 1, j)
-            if ks.start >= ks.stop:
-                adj[i, j] = adj[j, i] = 1.0
-                continue
-            k_idx = np.arange(1, j - i)
-            y_line = yi + (yj - yi) * (k_idx / (j - i))
-            if np.all(x[ks] < y_line):
-                adj[i, j] = adj[j, i] = 1.0
+    for i in range(n - 1):
+        # Slopes from point i to every subsequent point
+        slopes = (x[i + 1 :] - x[i]) / np.arange(1, n - i, dtype=float)
+        # Adjacent point is always visible
+        adj[i, i + 1] = adj[i + 1, i] = 1.0
+        if slopes.size > 1:
+            # Point j is visible iff slope(i,j) > max slope to any k in (i,j)
+            cummax = np.maximum.accumulate(slopes)
+            visible = slopes[1:] > cummax[:-1]
+            idxs = np.nonzero(visible)[0] + (i + 2)
+            adj[i, idxs] = 1.0
+            adj[idxs, i] = 1.0
     return cast(Array, adj)
 
 
@@ -1009,14 +1014,16 @@ def matrix_profile(x: Array, m: int, *, nan_policy: NanPolicy = "raise") -> Arra
     stds = windows.std(axis=1, keepdims=True)
     z = (windows - means) / (stds + 1e-12)
     n_sub = z.shape[0]
-    profile = np.empty(n_sub, dtype=float)
     excl = m // 2
-    for i in range(n_sub):
-        dist = np.linalg.norm(z[i] - z, axis=1)
-        lo = max(0, i - excl)
-        hi = min(n_sub, i + excl + 1)
-        dist[lo:hi] = np.inf
-        profile[i] = dist.min()
+    # Vectorised pairwise distance: ||a-b||^2 = ||a||^2 + ||b||^2 - 2*a.b
+    sq_norms = np.sum(z ** 2, axis=1)
+    dist_sq = sq_norms[:, None] + sq_norms[None, :] - 2.0 * (z @ z.T)
+    np.maximum(dist_sq, 0.0, out=dist_sq)
+    dist_mat = np.sqrt(dist_sq)
+    # Mask the exclusion zone (trivial matches near the diagonal)
+    idx = np.arange(n_sub)
+    dist_mat[np.abs(idx[:, None] - idx[None, :]) <= excl] = np.inf
+    profile = dist_mat.min(axis=1)
     profile = profile / (np.max(profile) + 1e-12)
     return cast(Array, profile)
 

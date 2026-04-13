@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Iterator, Sequence
-from typing import Any, Callable, Literal, cast, overload
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from typing import Any, Literal, cast, overload
 
 import numpy as np
 from numpy.typing import NDArray

@@ -37,5 +37,12 @@ def test_iter_npz(tmp_path: Path) -> None:
 
 
 def test_iter_parquet_importerror(tmp_path: Path) -> None:
-    with pytest.raises(ImportError):
+    try:
+        import pyarrow  # noqa: F401
+    except ImportError:
+        with pytest.raises(ImportError):
+            list(iter_parquet(str(tmp_path / "x.parquet")))
+        return
+    # pyarrow is installed — verify that a missing file raises FileNotFoundError
+    with pytest.raises(FileNotFoundError):
         list(iter_parquet(str(tmp_path / "x.parquet")))

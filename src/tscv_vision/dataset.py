@@ -98,13 +98,15 @@ class WindowedDataset:
 
     def __iter__(self) -> Iterator[tuple[Array, dict[str, int]]]:
         self._ensure()
-        assert self._features is not None and self._starts is not None
+        if self._features is None or self._starts is None:
+            raise RuntimeError("dataset not materialised")
         for feat, start in zip(self._features, self._starts, strict=True):
             yield feat, {"start": int(start)}
 
     def __len__(self) -> int:  # pragma: no cover - trivial
         self._ensure()
-        assert self._starts is not None
+        if self._starts is None:
+            raise RuntimeError("dataset not materialised")
         return int(self._starts.shape[0])
 
 

@@ -743,6 +743,11 @@ def extract_feature_vector(
                 if selected is not None and name in selected:
                     raise
                 continue
+    if not parts:
+        raise RuntimeError(
+            "No feature extractors produced output; install optional "
+            "dependencies (pywavelets, etc.) or pass a narrower 'selected' list."
+        )
     return np.concatenate(parts, dtype=float)
 
 

@@ -67,6 +67,60 @@ def gaf(
         return cast(Array, cp.asnumpy(out))
 
 
+def gaf_batch(
+    X: Array,
+    *,
+    method: str = "summation",
+    device: int | None = None,
+    mem_limit: int | None = None,
+) -> Array:
+    """Batched GAF encoder on the GPU.
+
+    Parameters
+    ----------
+    X:
+        Input of shape ``(B, n)``: ``B`` windows of length ``n``.
+    method:
+        ``"summation"`` or ``"difference"``.
+    device, mem_limit:
+        Same semantics as :func:`gaf`. When set, chunks along the batch axis
+        so the resulting ``(chunk, n, n)`` slab stays under ``mem_limit``
+        bytes.
+
+    Returns
+    -------
+    Array
+        Stacked GAF images of shape ``(B, n, n)``.
+    """
+
+    _require_cupy()
+    if X.ndim != 2:
+        raise ValueError("gaf_batch expects a 2D (B, n) input")
+    summation = method == "summation"
+    if not summation and method != "difference":
+        raise ValueError("method must be 'summation' or 'difference'")
+    B, n = X.shape
+    with cp.cuda.Device(device if device is not None else 0):
+        X_cp = cp.asarray(X, dtype=cp.float64)
+        phi = cp.arccos(cp.clip(X_cp, -1.0, 1.0))  # (B, n)
+        out = cp.empty((B, n, n), dtype=cp.float64)
+        if mem_limit is not None:
+            if mem_limit <= 0:
+                raise ValueError("mem_limit must be positive")
+            slab_bytes = n * n * 8
+            chunk = max(1, mem_limit // slab_bytes)
+        else:
+            chunk = B
+        for start in range(0, B, chunk):
+            end = min(B, start + chunk)
+            phi_chunk = phi[start:end]
+            if summation:
+                out[start:end] = cp.cos(phi_chunk[:, :, None] + phi_chunk[:, None, :])
+            else:
+                out[start:end] = cp.sin(phi_chunk[:, :, None] - phi_chunk[:, None, :])
+        return cast(Array, cp.asnumpy(out))
+
+
 def spectrogram(
     x: Array,
     win: int,
@@ -148,4 +202,4 @@ def lbp(img: Array, *, device: int | None = None) -> Array:
         return cast(Array, cp.asnumpy(out))
 
 
-__all__ = ["gaf", "spectrogram", "convolve2d", "lbp", "memory_usage"]
+__all__ = ["gaf", "gaf_batch", "spectrogram", "convolve2d", "lbp", "memory_usage"]

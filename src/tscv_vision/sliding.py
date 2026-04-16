@@ -152,6 +152,9 @@ def encode_sliding(
     channel_fusion: Literal["stack", "mean", "concat"] = "stack",
     cwt_scales: Array | None = None,
     workers: int | None = None,
+    use_gpu: bool | Literal["auto"] = False,
+    gpu_device: int | None = None,
+    gpu_mem_limit: int | None = None,
     lazy: Literal[False] = False,
 ) -> tuple[Array, IntArray]:
     ...
@@ -172,6 +175,9 @@ def encode_sliding(
     channel_fusion: Literal["stack", "mean", "concat"] = "stack",
     cwt_scales: Array | None = None,
     workers: int | None = None,
+    use_gpu: bool | Literal["auto"] = False,
+    gpu_device: int | None = None,
+    gpu_mem_limit: int | None = None,
     lazy: Literal[True],
 ) -> Iterator[tuple[Array, int]]:
     ...
@@ -191,6 +197,9 @@ def encode_sliding(
     channel_fusion: Literal["stack", "mean", "concat"] = "stack",
     cwt_scales: Array | None = None,
     workers: int | None = None,
+    use_gpu: bool | Literal["auto"] = False,
+    gpu_device: int | None = None,
+    gpu_mem_limit: int | None = None,
     lazy: bool = False,
 ) -> tuple[Array, IntArray] | Iterator[tuple[Array, int]]:
     """Encode sliding windows from ``x`` into images.
@@ -257,6 +266,38 @@ def encode_sliding(
             np.zeros((0,), dtype=int),
         )
     starts = np.arange(n_windows, dtype=int) * real_hop
+
+    if use_gpu and x.ndim == 1 and isinstance(encoder, str) and encoder in {"gaf", "gadf"}:
+        take_gpu = use_gpu is True or (
+            use_gpu == "auto" and n_windows * size * size * 8 >= 10 * 1024 * 1024
+        )
+        if take_gpu:
+            try:
+                from .gpu import encoders as _gpu_enc
+            except ImportError:
+                take_gpu = False
+            if take_gpu and np.all(np.isfinite(win_view)):
+                method: Literal["summation", "difference"] = (
+                    "summation" if encoder == "gaf" else "difference"
+                )
+                try:
+                    batch = np.ascontiguousarray(win_view, dtype=float)
+                    bmin = batch.min(axis=1, keepdims=True)
+                    bmax = batch.max(axis=1, keepdims=True)
+                    span = bmax - bmin
+                    safe = np.where(span == 0, 1.0, span)
+                    scaled = (batch - bmin) / safe * 2.0 - 1.0
+                    scaled = np.where(span == 0, 0.0, scaled)
+                    imgs = _gpu_enc.gaf_batch(
+                        scaled,
+                        method=method,
+                        device=gpu_device,
+                        mem_limit=gpu_mem_limit,
+                    )
+                    return imgs, starts
+                except RuntimeError:
+                    pass  # fall through to CPU path
+
     imgs_list = list(map_parallel(func, cast(Iterable[Array], win_view), workers))
 
     if isinstance(encoder, str) and encoder == "spec":

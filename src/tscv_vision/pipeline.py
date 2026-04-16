@@ -141,6 +141,7 @@ class AdaptivePipeline:
 
     selected_encoder_: str | None = field(init=False, default=None)
     selected_features_: NDArray[np.int64] | None = field(init=False, default=None)
+    model_: Any = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if not self.encoders:
@@ -200,6 +201,14 @@ class AdaptivePipeline:
 
     @staticmethod
     def load(path: str) -> AdaptivePipeline:
+        """Load a pipeline previously written by :meth:`save`.
+
+        .. warning::
+            This uses :mod:`pickle` and must only be called on files from a
+            trusted source. Unpickling attacker-controlled data can execute
+            arbitrary code.
+        """
+
         with open(path, "rb") as fh:
             obj = pickle.load(fh)
         if not isinstance(obj, AdaptivePipeline):
@@ -301,7 +310,7 @@ class FeatureEnsemble:
     cv: int = 3
     random_state: int | None = None
 
-    weights_: NDArray[np.float64] = field(init=False)
+    weights_: NDArray[np.float64] | None = field(init=False, default=None)
 
     def _extract_all(self, X: Array, name: str) -> Array:
         func = get_encoder(name)
@@ -330,11 +339,12 @@ class FeatureEnsemble:
         return self
 
     def transform(self, X: Array) -> Array:
-        if not hasattr(self, "weights_"):
+        weights = self.weights_
+        if weights is None:
             raise ValueError("Ensemble must be fitted first")
         X = _validate_dataset(X)
         feats = []
-        for w, name in zip(self.weights_, self.encoders, strict=True):
+        for w, name in zip(weights, self.encoders, strict=True):
             f = self._extract_all(X, name)
             feats.append(w * f)
         return np.hstack(feats)

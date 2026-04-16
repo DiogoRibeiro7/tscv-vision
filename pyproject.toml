@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{ include = "tscv_vision", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
+python = ">=3.10,<3.13"
 numpy = ">=1.24"
 torch = {version = ">=2.2", optional = true}
 fastapi = {version = ">=0.110", optional = true}

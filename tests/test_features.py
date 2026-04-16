@@ -38,6 +38,27 @@ def test_extract_feature_vector() -> None:
     assert vec.shape == (expected,)
 
 
+def test_extract_feature_vector_unknown_selected() -> None:
+    import pytest
+
+    img = np.zeros((4, 4))
+    with pytest.raises(KeyError):
+        features.extract_feature_vector(img, selected=["does_not_exist"])
+
+
+def test_extract_feature_vector_empty_parts_raises(monkeypatch) -> None:
+    import pytest
+
+    def _always_missing(img: np.ndarray, bins: int) -> np.ndarray:
+        raise ImportError("simulated missing dependency")
+
+    registry = {name: _always_missing for name in features.FEATURES_REGISTRY}
+    monkeypatch.setattr(features, "FEATURES_REGISTRY", registry)
+    img = np.zeros((4, 4))
+    with pytest.raises(RuntimeError, match="No feature extractors"):
+        features.extract_feature_vector(img)
+
+
 def test_extract_feature_vector_multichannel() -> None:
     base = np.arange(16, dtype=float).reshape(4, 4)
     img = np.stack([base, base * 0], axis=-1)

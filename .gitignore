@@ -1,24 +1,60 @@
 # Python
 __pycache__/
 *.py[cod]
-*.egg-info/
-.venv/
+*$py.class
 
-# Poetry
+# Packaging / build
+*.egg-info/
+.eggs/
+build/
+dist/
+MANIFEST
+
+# Compiled Cython / native extensions
+src/tscv_vision/_encoders_cy*.so
+src/tscv_vision/_encoders_cy*.pyd
+src/tscv_vision/_encoders_cy*.dll
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Poetry (library: lockfile intentionally not tracked)
 poetry.lock
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Notebooks
-.ipynb_checkpoints/
-
-# VSCode
-.vscode/
+# Local secrets / environment
+.env
+.env.*
+!.env.example
 
 # Sample outputs
 samples/*.npz
 samples/*.npy
-src/tscv_vision/_encoders_cy*.so
-dist/

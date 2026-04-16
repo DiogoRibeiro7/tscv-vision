@@ -66,3 +66,39 @@ def test_adaptive_pipeline_optimize() -> None:
     assert best_enc == "sum"
     assert best_k > 0
     assert 0 <= score <= 1
+
+
+def test_adaptive_pipeline_unfitted_defaults() -> None:
+    pipe = AdaptivePipeline(encoders=["sum"], random_state=0)
+    assert pipe.selected_encoder_ is None
+    assert pipe.selected_features_ is None
+    assert pipe.model_ is None
+
+
+def test_adaptive_pipeline_transform_before_fit() -> None:
+    pipe = AdaptivePipeline(encoders=["sum"], random_state=0)
+    X = np.zeros((3, 4))
+    with pytest.raises(ValueError, match="fitted"):
+        pipe.transform(X)
+
+
+def test_adaptive_pipeline_load_rejects_foreign_pickle(tmp_path) -> None:
+    import pickle
+
+    bogus = tmp_path / "not_a_pipeline.pkl"
+    with open(bogus, "wb") as fh:
+        pickle.dump({"hello": "world"}, fh)
+    with pytest.raises(TypeError, match="Invalid pipeline"):
+        AdaptivePipeline.load(bogus)
+
+
+def test_feature_ensemble_unfitted_default() -> None:
+    ens = FeatureEnsemble(["sum", "zero"], random_state=0)
+    assert ens.weights_ is None
+
+
+def test_feature_ensemble_transform_before_fit() -> None:
+    ens = FeatureEnsemble(["sum", "zero"], random_state=0)
+    X = np.zeros((3, 4))
+    with pytest.raises(ValueError, match="fitted"):
+        ens.transform(X)

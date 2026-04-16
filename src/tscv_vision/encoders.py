@@ -340,7 +340,7 @@ def gaf(
     if use_gpu:
         try:
             from .gpu.encoders import gaf as _gaf_gpu
-        except Exception:  # pragma: no cover - optional path
+        except ImportError:  # pragma: no cover - optional path
             pass
         else:
             try:
@@ -516,7 +516,7 @@ def spectrogram(
     if use_gpu:
         try:
             from .gpu.encoders import spectrogram as _spec_gpu
-        except Exception:  # pragma: no cover - optional path
+        except ImportError:  # pragma: no cover - optional path
             pass
         else:
             try:

@@ -174,7 +174,73 @@ def benchmark_encoder(
     return stats
 
 
-__all__ = ["benchmark_streaming", "benchmark_pipeline", "benchmark_encoder"]
+def benchmark_sliding_gaf(
+    length: int = 100_000,
+    *,
+    size: int = 256,
+    hop: int = 32,
+    repeats: int = 3,
+    use_gpu: bool = True,
+) -> dict[str, float]:
+    """Benchmark ``encode_sliding`` with GAF on CPU vs batched GPU path.
+
+    Parameters
+    ----------
+    length:
+        Length of the input series.
+    size, hop:
+        Sliding window parameters.
+    repeats:
+        Number of timing repetitions per path.
+    use_gpu:
+        When ``False`` skip the GPU timing and return ``gpu=None``. Useful on
+        machines without CuPy installed.
+
+    Returns
+    -------
+    dict
+        ``{"cpu": seconds, "gpu": seconds | None, "speedup": float | None,
+        "n_windows": int}``.
+    """
+
+    from .sliding import encode_sliding
+
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal(length)
+
+    start = perf_counter()
+    for _ in range(repeats):
+        imgs, _ = encode_sliding(x, encoder="gaf", size=size, hop=hop)
+    cpu_time = (perf_counter() - start) / repeats
+    n_windows = imgs.shape[0]
+
+    gpu_time: float | None = None
+    if use_gpu:
+        try:
+            start = perf_counter()
+            for _ in range(repeats):
+                encode_sliding(
+                    x, encoder="gaf", size=size, hop=hop, use_gpu=True
+                )
+            gpu_time = (perf_counter() - start) / repeats
+        except RuntimeError:
+            gpu_time = None
+
+    speedup = cpu_time / gpu_time if gpu_time and gpu_time > 0 else None
+    return {
+        "cpu": cpu_time,
+        "gpu": gpu_time,
+        "speedup": speedup,
+        "n_windows": float(n_windows),
+    }
+
+
+__all__ = [
+    "benchmark_streaming",
+    "benchmark_pipeline",
+    "benchmark_encoder",
+    "benchmark_sliding_gaf",
+]
 
 
 def main() -> None:

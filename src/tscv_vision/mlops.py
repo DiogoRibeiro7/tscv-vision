@@ -306,7 +306,7 @@ def create_feature_service() -> FastAPI:  # pragma: no cover - requires fastapi
     except Exception:  # pragma: no cover - metrics optional
         counter = None
 
-    @app.post("/extract")  # type: ignore[misc]
+    @app.post("/extract")
     def extract(data: list[float] = Body(..., embed=True)) -> dict[str, Any]:  # noqa: B008
         arr = np.asarray(data, dtype=float)
         if arr.ndim != 1 or arr.size < 2:
@@ -339,6 +339,10 @@ def create_monitoring_app(
 
     app = FastAPI(title="tscv-monitor")
 
+    # Pre-declare optional metric objects for precise typing
+    drift_counter: Any | None = None
+    quality_gauge: Any | None = None
+    health_gauge: Any | None = None
     try:  # optional Prometheus metrics
         from prometheus_client import Counter, Gauge, make_asgi_app
 
@@ -353,15 +357,15 @@ def create_monitoring_app(
         )
         app.mount("/metrics", make_asgi_app())
     except Exception:  # pragma: no cover - metrics optional
-        drift_counter = quality_gauge = health_gauge = None
+        pass
 
-    @app.get("/health")  # type: ignore[misc]
+    @app.get("/health")
     def health() -> dict[str, str]:
         if health_gauge is not None:
             health_gauge.labels(component="api").set(1.0)
         return {"status": "ok"}
 
-    @app.post("/drift")  # type: ignore[misc]
+    @app.post("/drift")
     def drift(
         baseline: list[float] = Body(..., embed=True),  # noqa: B008
         current: list[float] = Body(..., embed=True),  # noqa: B008
@@ -373,7 +377,7 @@ def create_monitoring_app(
             drift_counter.inc()
         return {"drift": bool(has_drift)}
 
-    @app.post("/quality")  # type: ignore[misc]
+    @app.post("/quality")
     def quality(score: float = Body(..., embed=True)) -> dict[str, float]:  # noqa: B008
         if quality_gauge is not None:
             quality_gauge.set(score)

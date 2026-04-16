@@ -369,7 +369,8 @@ class OnlineLearner:
         if self._feat_mean is None:
             self._feat_mean = np.zeros_like(feat)
             self._feat_m2 = np.zeros_like(feat)
-        assert self._feat_m2 is not None and self._feat_mean is not None
+        if self._feat_m2 is None or self._feat_mean is None:
+            raise RuntimeError("feature statistics not initialised")
         self._feat_count += 1
         delta = feat - self._feat_mean
         self._feat_mean += delta / self._feat_count
@@ -427,7 +428,8 @@ class OnlineLearner:
         feat = self.feature_fn(win)
         feat = self._update_stats(feat)
         self._ensure_model(int(feat.size))
-        assert self.model is not None
+        if self.model is None:
+            raise RuntimeError("model not initialised")
         pred = float(self.model.predict(feat))
         self.model.partial_fit(feat, float(target))
         self._check_drift(abs(pred - float(target)))
@@ -441,7 +443,8 @@ class OnlineLearner:
         win = np.array(buf, dtype=float)
         feat = self.feature_fn(win)
         if self._active is not None:
-            assert self._feat_mean is not None and self._feat_m2 is not None
+            if self._feat_mean is None or self._feat_m2 is None:
+                raise RuntimeError("feature statistics not initialised")
             var = self._feat_m2 / max(1, self._feat_count - 1)
             std = np.sqrt(np.maximum(var[self._active], 1e-12))
             feat = (feat[self._active] - self._feat_mean[self._active]) / std

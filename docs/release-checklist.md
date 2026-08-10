@@ -5,11 +5,23 @@
 - `poetry run mypy src`
 - `poetry run pytest -q`
 - `./scripts/integration.sh`
+- `python -m build`
+- `python -m twine check dist/*`
+
+## PyPI trusted publishing
+- Create or claim the `tscv-vision` project on PyPI.
+- Configure a trusted publisher for:
+  - Owner: `DiogoRibeiro7`
+  - Repository name: `tscv-vision`
+  - Workflow filename: `publish.yml`
+- Do not create or store a PyPI API token for GitHub Actions. The publish workflow uses OpenID Connect.
 
 ## Versioning
 - Update `pyproject.toml` and `CHANGELOG.md`
+- Update `setup.py` and `src/tscv_vision/__init__.py`
 - Commit with `build: release vX.Y.Z`
-- Tag the commit: `git tag vX.Y.Z && git push --tags`
+- Tag the commit: `git tag vX.Y.Z && git push origin vX.Y.Z`
+- The `Publish` GitHub Actions workflow publishes tagged releases to PyPI.
 
 ## Documentation
 - Regenerate README examples and ensure links are valid

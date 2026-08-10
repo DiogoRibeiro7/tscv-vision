@@ -1,34 +1,56 @@
 from __future__ import annotations
 
-import numpy
+import os
+from pathlib import Path
+
 from setuptools import Extension, find_packages, setup
 
-try:  # pragma: no cover - build time only
-    from Cython.Build import cythonize
-    USE_CYTHON = True
-except Exception:  # pragma: no cover - build time only
-    USE_CYTHON = False
+ROOT = Path(__file__).parent
+BUILD_EXT = os.environ.get("TSCV_BUILD_EXT", "").lower() in {"1", "true", "yes", "on"}
 
-ext = ".pyx" if USE_CYTHON else ".c"
-extensions = [
-    Extension(
-        "tscv_vision._encoders_cy",
-        [f"src/tscv_vision/_encoders_cy{ext}"],
-        include_dirs=[numpy.get_include()],
-    )
-]
-if USE_CYTHON:
-    extensions = cythonize(extensions, language_level="3")
+extensions: list[Extension] = []
+if BUILD_EXT:
+    import numpy
+
+    try:  # pragma: no cover - build time only
+        from Cython.Build import cythonize
+
+        USE_CYTHON = True
+    except Exception:  # pragma: no cover - build time only
+        USE_CYTHON = False
+
+    ext = ".pyx" if USE_CYTHON else ".c"
+    extensions = [
+        Extension(
+            "tscv_vision._encoders_cy",
+            [f"src/tscv_vision/_encoders_cy{ext}"],
+            include_dirs=[numpy.get_include()],
+        )
+    ]
+    if USE_CYTHON:
+        extensions = cythonize(extensions, language_level="3")
+
+long_description = (ROOT / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="tscv-vision",
     version="0.1.1",
     description="Computer-vision feature engineering for 1D time series (NumPy-first).",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     author="Diogo Ribeiro",
     author_email="dfr@esmad.ipp.pt",
+    url="https://github.com/DiogoRibeiro7/tscv-vision",
+    project_urls={
+        "Documentation": "https://github.com/DiogoRibeiro7/tscv-vision#readme",
+        "Source": "https://github.com/DiogoRibeiro7/tscv-vision",
+        "Issues": "https://github.com/DiogoRibeiro7/tscv-vision/issues",
+    },
     license="MIT",
+    license_files=["LICENSE"],
     packages=find_packages("src"),
     package_dir={"": "src"},
+    python_requires=">=3.10,<3.13",
     install_requires=["numpy>=1.24"],
     extras_require={
         "torch": ["torch>=2.2"],
@@ -47,6 +69,22 @@ setup(
         "gpu": ["cupy"],
         "research": [],
     },
+    entry_points={
+        "console_scripts": [
+            "tscv-features=tscv_vision.cli:main",
+        ],
+    },
     ext_modules=extensions,
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Topic :: Scientific/Engineering :: Image Processing",
+    ],
     zip_safe=False,
 )

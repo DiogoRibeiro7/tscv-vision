@@ -1,2 +1,3 @@
+include LICENSE
 include src/tscv_vision/_encoders_cy.pyx
 include src/tscv_vision/_encoders_cy.c

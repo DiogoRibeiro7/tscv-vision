@@ -31,6 +31,8 @@ mypy = ">=1.10"
 typing-extensions = ">=4.8"
 pytest-cov = "^6.2.1"
 pre-commit = ">=3.7"
+build = ">=1.2"
+twine = ">=5.1"
 
 [tool.poetry.scripts]
 tscv-features = "tscv_vision.cli:main"
@@ -53,7 +55,7 @@ cli = ["pyyaml"]
 gpu = ["cupy"]
 
 [build-system]
-requires = ["setuptools>=61", "wheel", "Cython", "numpy"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.ruff]

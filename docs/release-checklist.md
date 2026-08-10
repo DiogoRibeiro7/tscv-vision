@@ -16,9 +16,16 @@
   - Workflow filename: `publish.yml`
 - Do not create or store a PyPI API token for GitHub Actions. The publish workflow uses OpenID Connect.
 
+## Zenodo archiving
+- Enable the `DiogoRibeiro7/tscv-vision` repository in Zenodo's GitHub integration.
+- Keep `.zenodo.json` metadata current before each release.
+- Create a GitHub Release for the pushed version tag so Zenodo archives the release and mints a DOI.
+- Add the Zenodo DOI badge to `README.md` after the first archive exists.
+
 ## Versioning
 - Update `pyproject.toml` and `CHANGELOG.md`
 - Update `setup.py` and `src/tscv_vision/__init__.py`
+- Update `.zenodo.json` and `CITATION.cff`
 - Commit with `build: release vX.Y.Z`
 - Tag the commit: `git tag vX.Y.Z && git push origin vX.Y.Z`
 - The `Publish` GitHub Actions workflow publishes tagged releases to PyPI.

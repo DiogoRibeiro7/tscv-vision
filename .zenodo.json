@@ -1,0 +1,45 @@
+{
+  "title": "tscv-vision: Computer-vision feature engineering for 1D time series",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "mit",
+  "version": "0.1.1",
+  "language": "eng",
+  "creators": [
+    {
+      "name": "Ribeiro, Diogo",
+      "affiliation": "School of Media Arts and Design, Polytechnic of Porto, Portugal",
+      "orcid": "0009-0001-2022-7072"
+    }
+  ],
+  "description": "tscv-vision is a NumPy-first Python package for computer-vision feature engineering of one-dimensional time series. It converts time-series signals into image representations such as Gramian Angular Fields, recurrence plots, and STFT spectrograms; extracts classical image descriptors including intensity statistics, histograms, gradient histograms, and local binary patterns; and supports sliding-window processing plus a command-line workflow for NumPy .npy files.",
+  "keywords": [
+    "Python",
+    "NumPy",
+    "computer vision",
+    "feature engineering",
+    "time series",
+    "time-series imaging",
+    "Gramian Angular Field",
+    "recurrence plot",
+    "spectrogram",
+    "sliding windows",
+    "signal processing",
+    "machine learning"
+  ],
+  "notes": "The core package is designed to keep runtime dependencies minimal, with NumPy as the primary dependency and heavier integrations exposed through optional extras. Release archives are intended to support reproducible citation of the source code corresponding to each tagged version.",
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/DiogoRibeiro7/tscv-vision",
+      "relation": "isSupplementTo",
+      "scheme": "url",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/tscv-vision/",
+      "relation": "isIdenticalTo",
+      "scheme": "url",
+      "resource_type": "software"
+    }
+  ]
+}

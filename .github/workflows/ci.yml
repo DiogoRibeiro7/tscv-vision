@@ -1,7 +1,12 @@
 name: CI
+
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -24,11 +29,11 @@ jobs:
       - name: CLI smoke
         run: |
           python - <<'PY'
-import numpy as np
-np.save('series.npy', np.sin(np.linspace(0, 4*np.pi, 128)))
-PY
-          poetry run tscv-features --encoder gaf --input series.npy --output out.npz
-          poetry run tscv-features --encoder spec --sliding --win-len 64 --hop 32 --input series.npy --output out_sliding.npz
+          import numpy as np
+          np.save('series.npy', np.sin(np.linspace(0, 4*np.pi, 128)))
+          PY
+          poetry run tscv-features --encoders gaf --input series.npy --output out.npz
+          poetry run tscv-features --encoders spec --sliding --win-len 64 --hop 32 --input series.npy --output out_sliding.npz
       - name: Upload coverage
         uses: codecov/codecov-action@v3
         with:

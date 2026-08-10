@@ -12,7 +12,7 @@ repository-code: "https://github.com/DiogoRibeiro7/tscv-vision"
 url: "https://github.com/DiogoRibeiro7/tscv-vision"
 license: MIT
 version: "0.1.1"
-date-released: "2025-08-13"
+date-released: "2026-08-10"
 keywords:
   - time series
   - computer vision

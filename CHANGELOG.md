@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.1] - 2025-08-13
+## [0.1.1] - 2026-08-10
 - Document optional dependencies and provide sine-wave sample data
 - Configure Cython build and clean up experimental modules
 

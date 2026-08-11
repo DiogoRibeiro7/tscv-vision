@@ -78,6 +78,7 @@ DOCUMENTED: dict[str, Any] = {
     "nemenyi_critical_difference": stats.nemenyi_critical_difference,
     "cross_recurrence_plot": multivariate.cross_recurrence_plot,
     "joint_recurrence_plot": multivariate.joint_recurrence_plot,
+    "wavelet_coherence": multivariate.wavelet_coherence,
     "delay_embed": multivariate.delay_embed,
     "scattering_transform": scattering.scattering_transform,
     "scattering_meta": scattering.scattering_meta,

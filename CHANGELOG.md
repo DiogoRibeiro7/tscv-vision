@@ -14,6 +14,14 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`multivariate.wavelet_coherence`** — squared wavelet coherence between
+  two series, with an optional structured result carrying phase and both axes
+  so the return type follows the argument rather than the data. Validated on
+  bounds, on coupling confined to the first half of a record showing up in the
+  first half of the image, and on recovering a 0.9 rad phase lead exactly.
+  `smoothing=False` returns an identically-one image — the well-known
+  degeneracy of unsmoothed coherence — which is documented as a warning and
+  asserted in a test so it cannot be mistaken for a faster approximation.
 - **`encoders.chirplet_transform`** (registry key `chirplet`) — correlates
   the signal against Gaussian-windowed chirped atoms, resolving chirp rate as
   well as time and frequency. Computed by de-chirping each frame and taking

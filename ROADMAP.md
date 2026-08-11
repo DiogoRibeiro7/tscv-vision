@@ -1,6 +1,6 @@
 # Roadmap
 
-> Last updated: 2026-08-10 (0.2.0)
+> Last updated: 2026-08-11 (0.2.0 released; unreleased work on `main`)
 
 This roadmap tracks what has shipped, what is next, and the long-term vision
 for **tscv-vision**. Items are grouped by theme rather than strictly by
@@ -8,11 +8,29 @@ version so that priorities stay clear as scope shifts.
 
 **Current stance: new work must arrive validated.** The 0.2.0 review found
 that the API had outgrown its evidence. Rather than freeze the surface, the
-rule is now that nothing lands at LEVEL 0: every new encoder ships with a
-provenance entry in the metadata registry, tests against its defining formula
-or an independent implementation, a benchmark, and documentation — see
-`docs/encoder_validation.md` for where each one stands. The archive-scale
-benchmark study remains the v0.3.0 gate for any empirical claim.
+rule is that nothing *new* lands at LEVEL 0: every encoder added since ships
+with a provenance entry in the metadata registry, tests against its defining
+formula or an independent implementation, and documentation. One inherited
+encoder (`cwt`) is still at LEVEL 0 and is listed below as a gap rather than
+quietly relabelled. The archive-scale benchmark study remains the v0.3.0 gate
+for any empirical claim.
+
+## Where validation stands
+
+29 encoders carry provenance metadata, 17 of them reproducing a published
+method under its own name. Generated per-encoder detail lives in
+[docs/encoder_validation.md](docs/encoder_validation.md).
+
+| Level | Count | Meaning |
+| --- | ---: | --- |
+| 3 — reference | 8 | checked against an independent implementation |
+| 2 — synthetic | 13 | checked against the published formula or an analytic answer |
+| 1 — invariant | 7 | mathematical invariants only |
+| 0 — smoke | 1 | shape only (`cwt`) |
+| 4 — benchmark | 0 | **no encoder has been evaluated on real datasets** |
+
+The empty LEVEL 4 row is the honest headline: nothing here has been shown to
+be *useful*, only to be correct. That is what v0.3.0 is for.
 
 ---
 
@@ -40,6 +58,46 @@ benchmark study remains the v0.3.0 gate for any empirical claim.
 - [x] Matrix Profile — equivalence-tested against `stumpy`
 - [x] Random Projection Image
 - [x] Ensemble (stack / mean / weighted)
+
+### Encoders added after 0.2.0 (unreleased)
+
+Each shipped as its own PR with provenance metadata, validation tests and
+documentation.
+
+- [x] Synchrosqueezed CWT (`sst`) — reassignment to the instantaneous
+      frequency from the phase derivative; ridge tracks the analytic law
+- [x] Multitaper spectrogram (`mtspec`) — Thomson's estimator over DPSS
+      tapers; variance falls from 0.93 to 0.18 going from 1 to 7 tapers.
+      Requires SciPy
+- [x] Chirplet transform (`chirplet`) — chirped atoms, recovers sweep rates
+      to within one grid step; the `c=0` slice provably equals an STFT
+- [x] Wavelet scattering (`scat`) — thin validated layer over Kymatio; the
+      coefficients are the backend's, verified verbatim
+- [x] Horizontal visibility graph (`hvg`) — `O(N)` stack algorithm checked
+      against the quadratic definition
+- [x] Ordinal pattern transition field (`otf`) — **TSCV-Vision
+      representation**; reproduces the published forbidden-pattern result for
+      the logistic map
+- [x] Delay-embedding density (`ded`) — **TSCV-Vision representation**;
+      recovers the logistic map's analytic parabola
+- [x] Cross recurrence plot — two series of possibly different lengths;
+      recovers a known lag as a diagonal offset
+- [x] Joint recurrence plot — per-channel thresholds, so rescaling one
+      channel by 1000x leaves the result unchanged
+- [x] Wavelet coherence — with the degenerate unsmoothed case documented and
+      tested rather than hidden
+
+### Multivariate and backend modules (unreleased)
+
+- [x] `tscv_vision.multivariate` — encoders taking more than one series, with
+      shared recurrence machinery, plus `MULTIVARIATE_METADATA` so living
+      outside the univariate registry does not mean living outside the
+      provenance system
+- [x] `tscv_vision.scattering` — Kymatio-backed, with the backend recorded as
+      an `optional_dependency` in the metadata
+- [x] `RepresentationInfo.optional_dependency` — registry consumers can tell
+      "not installed" apart from "broken", and a test enforces that anything
+      raising `ImportError` declares what it needs
 
 ### Feature extraction & pipeline
 
@@ -110,7 +168,9 @@ benchmark study remains the v0.3.0 gate for any empirical claim.
 ## v0.3.0 – Evidence
 
 **Theme:** Produce the experimental results the current API surface would need
-to be defensible. Nothing else ships until this does.
+to be defensible. The surface has grown since 0.2.0, which raises the bar
+rather than lowering it: 29 encoders with no benchmark is a larger gap than
+19 encoders with no benchmark.
 
 ### Benchmark study
 
@@ -135,8 +195,8 @@ Read `docs/encoder_validation.md` for the current per-encoder status.
       implementation with no numerical comparison against Torrence & Compo
       or PyWavelets
 - [ ] Raise the LEVEL 1 encoders (`gdf`, `msrp`, `msc`, `randproj`,
-      `shapelet`, `eph`) to LEVEL 2 with tests against their defining
-      formula, or retire them
+      `shapelet`, `eph`, `ensemble`) to LEVEL 2 with tests against their
+      defining formula, or retire them
 - [ ] Numerical validation for the domain modules, or demote them to examples
 - [ ] Decide the fate of thin/unvalidated subsystems (`irregular.py`,
       parts of `multimodal.py`, the neural adapters that have no upstream
@@ -149,6 +209,37 @@ Read `docs/encoder_validation.md` for the current per-encoder status.
       branch; no released version has it. Add it as a separate encoder under
       its own name once the backend ships it, rather than approximating it —
       `tscv_vision.scattering` provides time scattering in the meantime.
+- [ ] Track Kymatio's SciPy compatibility. 0.3.0 imports
+      `scipy.special.sph_harm`, removed in SciPy 1.17, so the `scattering`
+      extra pins `scipy<1.17`. Drop the pin when upstream fixes it.
+
+---
+
+## Learned and pretrained representations
+
+**Theme:** Extend `tscv_vision.representations` beyond deterministic encoders.
+The abstractions exist — `LearnedRepresentation`, `PretrainedBackbone`,
+`LearnedFusion` — and are deliberately still abstract.
+
+The leakage rules already encoded in those base classes apply throughout: `fit`
+sees training data only, fusion weights are parameters, and a pretrained
+checkpoint whose corpus overlaps the evaluation data is contaminated in a way
+no cross-validation scheme can detect.
+
+- [ ] Pretrained vision encoder over encoder images (OpenCLIP / ViT), with the
+      checkpoint recorded in the metadata as provenance
+- [ ] Time-series foundation-model adapter
+- [ ] Multi-view fusion, learned rather than concatenated
+- [ ] Adaptive representation router
+- [ ] Learnable tokenisers (time-series and visual)
+- [ ] Self-supervised pretraining (JEPA, cross-view contrastive)
+- [ ] Representation analysis: agreement/complementarity, probing, retrieval,
+      caching
+- [ ] Shape dictionary, shape transition, wavelet token, phase-aware and
+      spectral-shift encoders
+
+Nothing in this track should land before the v0.3.0 benchmark exists: a learned
+representation with no baseline to beat is not evidence of anything.
 
 ### API hygiene
 

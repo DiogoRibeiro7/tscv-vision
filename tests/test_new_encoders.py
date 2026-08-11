@@ -44,9 +44,48 @@ def test_ensemble_mean() -> None:
 
 
 def test_persistence_image_shape() -> None:
-    x = np.sin(np.linspace(0, 2 * np.pi, 64))
+    x = np.sin(np.linspace(0, 8 * np.pi, 64))
     img = encoders.persistence_image(x, bins=16)
     assert img.shape == (16, 16)
+    assert np.all(img >= 0.0)
+    assert img.sum() > 0.0
+    with pytest.raises(ValueError):
+        encoders.persistence_image(x, bins=0)
+    with pytest.raises(ValueError):
+        encoders.persistence_image(x, sigma=0.0)
+    with pytest.raises(ValueError):
+        encoders.persistence_image(x, weight="nope")  # type: ignore[arg-type]
+
+
+def test_persistence_image_monotone_series_is_empty() -> None:
+    # A monotone series has a single component that never dies.
+    x = np.linspace(0.0, 1.0, 32)
+    assert encoders.persistence_diagram(x).shape == (0, 2)
+    assert np.all(encoders.persistence_image(x, bins=8) == 0.0)
+
+
+def test_persistence_diagram_elder_rule() -> None:
+    # Two valleys: the shallower one (birth 1) dies when it merges at 3.
+    x = np.array([0.0, 3.0, 1.0, 4.0])
+    np.testing.assert_allclose(encoders.persistence_diagram(x), [[1.0, 3.0]])
+    with_inf = encoders.persistence_diagram(x, include_infinite=True)
+    assert with_inf.shape == (2, 2)
+    assert np.isinf(with_inf[:, 1]).sum() == 1
+
+
+def test_persistence_diagram_is_translation_equivariant() -> None:
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=48)
+    shifted = encoders.persistence_diagram(x + 5.0)
+    np.testing.assert_allclose(shifted, encoders.persistence_diagram(x) + 5.0)
+
+
+def test_extrema_persistence_histogram_keeps_old_behaviour() -> None:
+    x = np.sin(np.linspace(0, 8 * np.pi, 64))
+    hist = encoders.extrema_persistence_histogram(x, bins=16)
+    assert hist.shape == (16, 16)
+    # Counts of extrema pairs, so the total is an integer count.
+    assert hist.sum() == float(int(hist.sum()))
 
 
 def test_randproj_deterministic() -> None:
@@ -107,10 +146,25 @@ def test_multi_scale_conv_stack() -> None:
     assert img.shape == (2, 32)
 
 
-def test_tpa_attention() -> None:
+def test_window_attention() -> None:
     x = np.sin(np.linspace(0, 2 * np.pi, 32))
-    img = encoders.tpa(x, window=4)
+    img = encoders.window_attention(x, window=4)
     assert img.shape == (29, 29)
     row_sums = img.sum(axis=1)
     assert np.allclose(row_sums, 1.0)
+    with pytest.raises(ValueError):
+        encoders.window_attention(x, window=0)
+    with pytest.raises(ValueError):
+        encoders.window_attention(x, window=33)
+
+
+def test_tpa_alias_is_deprecated() -> None:
+    x = np.sin(np.linspace(0, 2 * np.pi, 32))
+    with pytest.warns(DeprecationWarning, match="window_attention"):
+        img = encoders.tpa(x, window=4)
+    np.testing.assert_allclose(img, encoders.window_attention(x, window=4))
+    # The registry key keeps working without a warning for existing configs.
+    np.testing.assert_allclose(
+        encoders.get_encoder("tpa")(x), encoders.window_attention(x)
+    )
 

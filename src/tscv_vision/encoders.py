@@ -7,6 +7,8 @@ from typing import Any, Literal, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from ._deprecation import deprecated_alias
+
 try:  # optional
     import numba as _nb
 except Exception:  # pragma: no cover - optional dependency
@@ -200,7 +202,12 @@ def _minmax_scale(
 # ---------------------------------------------------------------------------
 
 if _HAS_NUMBA:
-    @_nb.njit(cache=True)  # type: ignore[misc]
+    # numba.njit is untyped upstream, so every use needs the ignore; the code
+    # is `untyped-decorator` whether or not numba is installed, because the
+    # fallback binds `_nb` to Any.
+    _njit: Any = _nb.njit(cache=True)
+
+    @_njit  # type: ignore[untyped-decorator]
     def _gaf_numba(x: Array, summation: bool) -> Array:  # pragma: no cover - compiled
         n = x.shape[0]
         phi = np.arccos(np.clip(x, -1.0, 1.0))
@@ -213,7 +220,7 @@ if _HAS_NUMBA:
                     out[i, j] = math.sin(phi[i] - phi[j])
         return out
 
-    @_nb.njit(cache=True)  # type: ignore[misc]
+    @_njit  # type: ignore[untyped-decorator]
     def _recurrence_numba(x: Array, eps: float) -> Array:  # pragma: no cover
         n = x.shape[0]
         out = np.empty((n, n), dtype=np.float64)
@@ -236,7 +243,7 @@ if _HAS_NUMBA:
                     out[i, j] = 1.0 - out[i, j] * scale
         return out
 
-    @_nb.njit(cache=True)  # type: ignore[misc]
+    @_njit  # type: ignore[untyped-decorator]
     def _spectrogram_frames(
         x: Array, win: int, hop: int, w: Array, n_frames: int
     ) -> Array:  # pragma: no cover
@@ -601,11 +608,227 @@ def cwt(
     return cast(Array, out)
 
 
-def persistence_image(x: Array, bins: int = 32, *, nan_policy: NanPolicy = "raise") -> Array:
-    """Simple persistence diagram histogram.
+def persistence_diagram(
+    x: Array,
+    *,
+    include_infinite: bool = False,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    """0-dimensional sublevel-set persistence diagram of a 1D series.
 
-    Approximates 0D persistent homology by pairing consecutive extrema and
-    accumulating their ``(birth, persistence)`` values into a 2D histogram.
+    Computes the exact degree-0 persistent homology of the lower-star
+    filtration of ``x``: sweeping the threshold upwards, each local minimum
+    creates a connected component and each local maximum merges two
+    components. By the elder rule the younger component (the one with the
+    larger birth value) dies at the merge. This is the standard sublevel-set
+    filtration used for time-series topological data analysis and agrees with
+    Ripser's ``H0`` on the corresponding lower-star complex.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    include_infinite:
+        If ``True`` the essential class (global minimum, never dies) is
+        appended with ``death = inf``. Default ``False``, matching what
+        vectorisations such as :func:`persistence_image` can consume.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(n_pairs, 2)`` array of ``(birth, death)`` values sorted by birth.
+        May be empty (shape ``(0, 2)``) for a monotone series.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` is invalid.
+
+    Examples
+    --------
+    >>> persistence_diagram(np.array([0.0, 3.0, 1.0, 4.0]))
+    array([[1., 3.]])
+    """
+
+    x = _validate_series(x, nan_policy=nan_policy)
+    n = x.size
+    parent = np.full(n, -1, dtype=np.int64)  # -1 marks "not yet added"
+    birth = np.empty(n, dtype=float)
+
+    def find(i: int) -> int:
+        root = i
+        while parent[root] != root:
+            root = int(parent[root])
+        while parent[i] != root:  # path compression
+            parent[i], i = root, int(parent[i])
+        return root
+
+    order = np.argsort(x, kind="stable")
+    pairs: list[tuple[float, float]] = []
+    for idx in order:
+        i = int(idx)
+        parent[i] = i
+        birth[i] = x[i]
+        for j in (i - 1, i + 1):
+            if j < 0 or j >= n or parent[j] == -1:
+                continue
+            root_i, root_j = find(i), find(j)
+            if root_i == root_j:
+                continue
+            # Elder rule: the component born later dies at the current value.
+            if birth[root_i] <= birth[root_j]:
+                older, younger = root_i, root_j
+            else:
+                older, younger = root_j, root_i
+            if birth[younger] < x[i]:
+                pairs.append((float(birth[younger]), float(x[i])))
+            parent[younger] = older
+    if include_infinite and n > 0:
+        pairs.append((float(np.min(x)), float("inf")))
+    if not pairs:
+        return np.zeros((0, 2), dtype=float)
+    diagram = np.asarray(pairs, dtype=float)
+    return cast(Array, diagram[np.argsort(diagram[:, 0], kind="stable")])
+
+
+#: Vectorised ``math.erf``; NumPy has no native erf and SciPy is not a
+#: dependency of the core package.
+_ERF = np.frompyfunc(math.erf, 1, 1)
+
+
+def _erf_cdf(z: Array) -> Array:
+    """Standard normal CDF of ``z``, evaluated elementwise."""
+
+    vals: Array = np.asarray(_ERF(z / math.sqrt(2.0)), dtype=float)
+    return 0.5 * (1.0 + vals)
+
+
+def persistence_image(
+    x: Array,
+    bins: int = 32,
+    *,
+    sigma: float | None = None,
+    weight: Literal["persistence", "ramp", "uniform"] = "persistence",
+    birth_range: tuple[float, float] | None = None,
+    pers_range: tuple[float, float] | None = None,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    """Persistence image of the 0D sublevel-set diagram of ``x``.
+
+    Implements the stable vectorisation of Adams et al. (2017), *Persistence
+    Images: A Stable Vector Representation of Persistent Homology*, JMLR
+    18(8):1-35. The diagram from :func:`persistence_diagram` is mapped to
+    birth--persistence coordinates, each point is replaced by a weighted
+    isotropic Gaussian, and each pixel receives the **exact integral** of that
+    surface over the pixel (computed from the normal CDF, not a point sample).
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    bins:
+        Number of pixels per axis ``>= 1``.
+    sigma:
+        Standard deviation of the Gaussian kernel. Defaults to one pixel
+        width of the persistence axis.
+    weight:
+        Weighting function :math:`w(b, p)` applied to each diagram point.
+        ``"persistence"`` uses :math:`w = p` (the standard choice, and the
+        default of :mod:`persim`), ``"ramp"`` uses Adams' piecewise-linear
+        ramp :math:`\\min(p / p_{\\max}, 1)`, and ``"uniform"`` uses
+        :math:`w = 1`. Any weight vanishing at ``p = 0`` keeps the map stable
+        with respect to the bottleneck distance.
+    birth_range, pers_range:
+        Explicit ``(min, max)`` extents of the image. Default to the range of
+        the diagram, which makes the image **series-relative**; pass fixed
+        ranges when images from different series must be comparable.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(bins, bins)`` image indexed as ``[persistence, birth]`` so that it
+        displays with persistence on the vertical axis. Empty diagrams give an
+        all-zero image.
+
+    Raises
+    ------
+    ValueError
+        If ``bins`` is not positive, ``sigma`` is not positive, ``weight`` is
+        unknown, or ``x`` is invalid.
+
+    Examples
+    --------
+    >>> img = persistence_image(np.sin(np.linspace(0, 8 * np.pi, 128)), bins=8)
+    >>> img.shape
+    (8, 8)
+
+    See Also
+    --------
+    extrema_persistence_histogram :
+        The cheaper extrema-pairing histogram previously exposed under this
+        name.
+    """
+
+    if bins < 1:
+        raise ValueError("bins must be >= 1")
+    if sigma is not None and sigma <= 0:
+        raise ValueError("sigma must be positive")
+    if weight not in {"persistence", "ramp", "uniform"}:
+        raise ValueError("weight must be 'persistence', 'ramp' or 'uniform'")
+
+    diagram = persistence_diagram(x, nan_policy=nan_policy)
+    if diagram.shape[0] == 0:
+        return np.zeros((bins, bins), dtype=float)
+
+    births = diagram[:, 0]
+    pers = diagram[:, 1] - diagram[:, 0]
+
+    b_lo, b_hi = birth_range if birth_range is not None else (births.min(), births.max())
+    p_lo, p_hi = pers_range if pers_range is not None else (0.0, pers.max())
+    if b_hi <= b_lo:
+        b_hi = b_lo + 1.0
+    if p_hi <= p_lo:
+        p_hi = p_lo + 1.0
+
+    if sigma is None:
+        sigma = (p_hi - p_lo) / bins
+    sigma = float(sigma)
+
+    if weight == "persistence":
+        w = pers
+    elif weight == "ramp":
+        w = np.minimum(pers / (pers.max() + 1e-300), 1.0)
+    else:
+        w = np.ones_like(pers)
+
+    b_edges = np.linspace(b_lo, b_hi, bins + 1)
+    p_edges = np.linspace(p_lo, p_hi, bins + 1)
+    # Exact integral of an isotropic Gaussian over each pixel: the product of
+    # the marginal CDF differences along each axis.
+    cdf_b = _erf_cdf((b_edges[None, :] - births[:, None]) / sigma)
+    cdf_p = _erf_cdf((p_edges[None, :] - pers[:, None]) / sigma)
+    mass_b = np.diff(cdf_b, axis=1)  # (n_points, bins)
+    mass_p = np.diff(cdf_p, axis=1)
+    img = np.einsum("i,ip,ib->pb", w, mass_p, mass_b)
+    return cast(Array, img)
+
+
+def extrema_persistence_histogram(
+    x: Array, bins: int = 32, *, nan_policy: NanPolicy = "raise"
+) -> Array:
+    """Histogram of consecutive-extrema ``(birth, persistence)`` pairs.
+
+    .. note::
+       This is **not** a persistence image and does not compute persistent
+       homology. It pairs each local extremum with the next one and histograms
+       the resulting value/amplitude pairs — a cheap heuristic descriptor of
+       oscillation structure. It was exposed as ``persistence_image`` before
+       0.2.0; the name now refers to the real construction. Use
+       :func:`persistence_image` for the topological representation.
 
     Parameters
     ----------
@@ -613,11 +836,13 @@ def persistence_image(x: Array, bins: int = 32, *, nan_policy: NanPolicy = "rais
         Input 1D series ``(N,)``.
     bins:
         Number of histogram bins per axis ``>=1``.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
 
     Returns
     -------
     ndarray
-        ``(bins, bins)`` persistence image.
+        ``(bins, bins)`` histogram of counts.
 
     Raises
     ------
@@ -638,8 +863,8 @@ def persistence_image(x: Array, bins: int = 32, *, nan_policy: NanPolicy = "rais
     pers = np.abs(deaths - births)
     b_norm = (births - x.min()) / (x.max() - x.min() + 1e-12)
     p_norm = pers / (pers.max() + 1e-12)
-    H, _, _ = np.histogram2d(b_norm, p_norm, bins=bins, range=[[0, 1], [0, 1]])
-    return cast(Array, H)
+    hist, _, _ = np.histogram2d(b_norm, p_norm, bins=bins, range=[[0, 1], [0, 1]])
+    return cast(Array, hist)
 
 
 def mtf(
@@ -776,22 +1001,139 @@ def dtw_matrix(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     return cast(Array, 1.0 - cost)
 
 
+def _gaussian_breakpoints(alphabet: int) -> Array:
+    """Equiprobable breakpoints of the standard normal for ``alphabet`` symbols."""
+
+    probs = np.arange(1, alphabet, dtype=float) / alphabet
+    # Inverse standard normal CDF via bisection on erf; alphabet is small so
+    # this costs nothing and avoids a SciPy dependency.
+    lo = np.full(probs.shape, -10.0)
+    hi = np.full(probs.shape, 10.0)
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        cdf = _erf_cdf(mid)
+        lo = np.where(cdf < probs, mid, lo)
+        hi = np.where(cdf < probs, hi, mid)
+    return cast(Array, 0.5 * (lo + hi))
+
+
+def sax_symbols(
+    x: Array,
+    segments: int = 8,
+    alphabet: int = 8,
+    *,
+    breakpoints: Literal["gaussian", "quantile"] = "gaussian",
+    nan_policy: NanPolicy = "raise",
+) -> NDArray[np.int64]:
+    """Symbolic Aggregate approXimation (SAX) word for ``x``.
+
+    Follows Lin et al. (2003/2007): the series is z-normalised, reduced by
+    Piecewise Aggregate Approximation to ``segments`` means, and each mean is
+    mapped to a symbol using equiprobable breakpoints of the standard normal.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    segments:
+        Number of PAA segments; must be in ``[1, len(x)]``.
+    alphabet:
+        Alphabet size ``>= 2``.
+    breakpoints:
+        ``"gaussian"`` (default) uses the standard SAX breakpoints on the
+        z-normalised series. ``"quantile"`` instead splits at empirical
+        quantiles of the segment means, which is *not* standard SAX: it is
+        data-adaptive, makes symbols incomparable across series, and always
+        uses the full alphabet. It is kept because it was the behaviour
+        before 0.2.0.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(segments,)`` integer symbols in ``[0, alphabet)``.
+
+    Raises
+    ------
+    ValueError
+        If ``segments`` or ``alphabet`` is out of range, or ``x`` is invalid.
+
+    Examples
+    --------
+    >>> sax_symbols(np.arange(8.0), segments=4, alphabet=4)
+    array([0, 1, 2, 3])
+    """
+
+    x = _validate_series(x, nan_policy=nan_policy)
+    if segments <= 0:
+        raise ValueError("segments must be >= 1")
+    if segments > x.size:
+        raise ValueError(
+            f"segments ({segments}) cannot exceed len(x) ({x.size}); each PAA "
+            "segment must contain at least one sample"
+        )
+    if alphabet < 2:
+        raise ValueError("alphabet must be >= 2")
+    means = np.array([seg.mean() for seg in np.array_split(x, segments)], dtype=float)
+    if breakpoints == "gaussian":
+        std = float(x.std())
+        z = (means - float(x.mean())) / std if std > 0 else np.zeros_like(means)
+        bps = _gaussian_breakpoints(alphabet)
+    elif breakpoints == "quantile":
+        z = means
+        bps = np.quantile(means, np.linspace(0.0, 1.0, alphabet + 1)[1:-1])
+    else:
+        raise ValueError("breakpoints must be 'gaussian' or 'quantile'")
+    return np.digitize(z, bps, right=False).astype(np.int64)
+
+
 def sax(
     x: Array,
     segments: int = 8,
     alphabet: int = 8,
     *,
+    breakpoints: Literal["gaussian", "quantile"] = "gaussian",
     nan_policy: NanPolicy = "raise",
 ) -> Array:
-    """Symbolic Aggregate approXimation image."""
+    """Symbolic Aggregate approXimation image.
 
-    x = _validate_series(x, nan_policy=nan_policy)
-    if segments <= 0 or alphabet < 2:
-        raise ValueError("invalid segments or alphabet")
-    segs = np.array_split(x, segments)
-    means = np.array([seg.mean() for seg in segs])
-    bps = np.quantile(means, np.linspace(0, 1, alphabet + 1)[1:-1])
-    symbols = np.digitize(means, bps, right=False)
+    Builds the SAX word with :func:`sax_symbols` and returns the binary
+    symbol-equality matrix — a recurrence plot in symbol space.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    segments:
+        Number of PAA segments; must be in ``[1, len(x)]``.
+    alphabet:
+        Alphabet size ``>= 2``.
+    breakpoints:
+        Breakpoint construction, see :func:`sax_symbols`. Defaults to the
+        standard Gaussian breakpoints; before 0.2.0 the (non-standard)
+        ``"quantile"`` variant was the only behaviour.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(segments, segments)`` binary matrix.
+
+    Raises
+    ------
+    ValueError
+        If parameters are out of range or ``x`` is invalid.
+    """
+
+    symbols = sax_symbols(
+        x,
+        segments,
+        alphabet,
+        breakpoints=breakpoints,
+        nan_policy=nan_policy,
+    )
     img = (symbols[:, None] == symbols[None, :]).astype(float)
     return cast(Array, img)
 
@@ -840,12 +1182,23 @@ def multi_scale_conv(
     return cast(Array, arr)
 
 
-def tpa(x: Array, window: int = 8, *, nan_policy: NanPolicy = "raise") -> Array:
-    """Temporal Pattern Attention encoder.
+def window_attention(x: Array, window: int = 8, *, nan_policy: NanPolicy = "raise") -> Array:
+    """Scaled dot-product self-attention between sliding windows.
 
-    Implements a simplified self-attention mechanism over sliding windows as
-    described by Li *et al.* (2019), yielding an attention matrix between
-    local temporal patterns.
+    Each length-``window`` subsequence acts as its own query, key and value,
+    giving a row-stochastic matrix of similarities between local temporal
+    patterns. It is a parameter-free encoder in the style of Vaswani et al.
+    (2017), not a learned model.
+
+    .. note::
+       This is **not** Temporal Pattern Attention. TPA (Shih, Sun & Lee,
+       2019, *Temporal Pattern Attention for Multivariate Time Series
+       Forecasting*, Machine Learning 108:1421-1441) runs CNN filters over
+       the hidden states of a recurrent network and attends over the
+       resulting row vectors with a learned scoring matrix. Nothing here is
+       learned and there are no hidden states, so the two are unrelated
+       beyond both using attention. The function was exposed as ``tpa`` with
+       an incorrect attribution before 0.2.0.
 
     Parameters
     ----------
@@ -853,6 +1206,8 @@ def tpa(x: Array, window: int = 8, *, nan_policy: NanPolicy = "raise") -> Array:
         Input 1D series ``(N,)``.
     window:
         Length of each local pattern ``>=1`` and ``<= N``.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
 
     Returns
     -------
@@ -875,6 +1230,16 @@ def tpa(x: Array, window: int = 8, *, nan_policy: NanPolicy = "raise") -> Array:
     exp = np.exp(scores)
     attn = exp / np.maximum(exp.sum(axis=1, keepdims=True), 1e-12)
     return cast(Array, attn)
+
+
+tpa = deprecated_alias(
+    window_attention,
+    "tpa",
+    reason=(
+        "The implementation is plain window self-attention, not the Temporal "
+        "Pattern Attention architecture of Shih, Sun & Lee (2019)."
+    ),
+)
 
 
 def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
@@ -978,25 +1343,50 @@ def shapelet_transform(
     return cast(Array, dists)
 
 
-def matrix_profile(x: Array, m: int, *, nan_policy: NanPolicy = "raise") -> Array:
-    """Naive matrix profile for motif/discord discovery.
+def matrix_profile(
+    x: Array,
+    m: int,
+    *,
+    exclusion: int | None = None,
+    normalize: bool = True,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    """Naive z-normalised matrix profile for motif/discord discovery.
+
+    For every length-``m`` subsequence the profile stores the Euclidean
+    distance to its closest non-trivial match, where matches within the
+    exclusion zone around the diagonal are ignored.
 
     Parameters
     ----------
     x:
         Input 1D series ``(N,)``.
     m:
-        Subsequence length ``>=2``.
+        Subsequence length ``>= 2``.
+    exclusion:
+        Half-width of the trivial-match exclusion zone. Defaults to ``m // 2``,
+        the usual convention.
+    normalize:
+        If ``True`` (default) the profile is divided by its maximum so that it
+        lies in ``[0, 1]``; set to ``False`` to keep raw distances.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
 
     Returns
     -------
     ndarray
-        Matrix profile ``(N - m + 1,)`` scaled to ``[0, 1]``.
+        Matrix profile of shape ``(N - m + 1,)``.
 
     Raises
     ------
     ValueError
-        If ``m`` is not in ``[2, len(x)]`` or ``x`` invalid.
+        If ``m`` is not in ``[2, len(x)]``, ``exclusion`` is negative, ``x`` is
+        invalid, or the series is too short for any subsequence to have a
+        non-trivial match. The last condition needs
+        ``N - m + 1 >= exclusion + 2``; with the default exclusion that means
+        ``N >= m + m // 2 + 1``. Previously such inputs silently returned
+        ``nan`` (every candidate was excluded, leaving an infinite profile
+        that was then divided by infinity).
 
     Examples
     --------
@@ -1009,14 +1399,23 @@ def matrix_profile(x: Array, m: int, *, nan_policy: NanPolicy = "raise") -> Arra
     n = x.size
     if m < 2 or m > n:
         raise ValueError("m must be in [2, len(x)]")
+    excl = m // 2 if exclusion is None else int(exclusion)
+    if excl < 0:
+        raise ValueError("exclusion must be non-negative")
+    n_sub = n - m + 1
+    if n_sub < excl + 2:
+        raise ValueError(
+            f"series is too short: with m={m} and exclusion={excl} there are "
+            f"{n_sub} subsequences but at least {excl + 2} are needed for every "
+            "subsequence to have a non-trivial match; use a smaller m, a smaller "
+            "exclusion, or a longer series"
+        )
     windows = np.lib.stride_tricks.sliding_window_view(x, m)
     means = windows.mean(axis=1, keepdims=True)
     stds = windows.std(axis=1, keepdims=True)
     z = (windows - means) / (stds + 1e-12)
-    n_sub = z.shape[0]
-    excl = m // 2
     # Vectorised pairwise distance: ||a-b||^2 = ||a||^2 + ||b||^2 - 2*a.b
-    sq_norms = np.sum(z ** 2, axis=1)
+    sq_norms = np.sum(z**2, axis=1)
     dist_sq = sq_norms[:, None] + sq_norms[None, :] - 2.0 * (z @ z.T)
     np.maximum(dist_sq, 0.0, out=dist_sq)
     dist_mat = np.sqrt(dist_sq)
@@ -1024,7 +1423,8 @@ def matrix_profile(x: Array, m: int, *, nan_policy: NanPolicy = "raise") -> Arra
     idx = np.arange(n_sub)
     dist_mat[np.abs(idx[:, None] - idx[None, :]) <= excl] = np.inf
     profile = dist_mat.min(axis=1)
-    profile = profile / (np.max(profile) + 1e-12)
+    if normalize:
+        profile = profile / (np.max(profile) + 1e-12)
     return cast(Array, profile)
 
 
@@ -1102,13 +1502,14 @@ register_encoder("rp", recurrence_plot)
 register_encoder("spec", spectrogram)
 register_encoder("cwt", cwt)
 register_encoder("ph", persistence_image)
+register_encoder("eph", extrema_persistence_histogram)
 register_encoder("mtf", mtf)
 register_encoder("gdf", gdf)
 register_encoder("msrp", multi_scale_rp)
 register_encoder("dtw", dtw_matrix)
 register_encoder("sax", sax)
 register_encoder("msc", multi_scale_conv)
-register_encoder("tpa", tpa)
+register_encoder("attn", window_attention)
 register_encoder("vg", visibility_graph)
 register_encoder("shapelet", shapelet_transform)
 register_encoder("mp", matrix_profile)
@@ -1119,6 +1520,16 @@ register_encoder("ensemble", ensemble)
 register_encoder("visibility_graph", visibility_graph)
 register_encoder("matrix_profile", matrix_profile)
 register_encoder("persistence_image", persistence_image)
+register_encoder("window_attention", window_attention)
+# Kept for backwards compatibility: "tpa" resolves to `window_attention`, which
+# is not the Temporal Pattern Attention architecture. See its docstring.
+register_encoder("tpa", window_attention)
+
+#: Names registered by this module, snapshotted before any user or plugin
+#: registration. Use it to tell built-in encoders — which carry provenance
+#: metadata in :mod:`tscv_vision.representations.metadata` — apart from
+#: encoders added at runtime via :func:`register_encoder`.
+BUILTIN_ENCODERS: frozenset[str] = frozenset(ENCODER_REGISTRY)
 
 
 __all__ = [
@@ -1126,14 +1537,18 @@ __all__ = [
     "recurrence_plot",
     "spectrogram",
     "cwt",
+    "persistence_diagram",
     "persistence_image",
+    "extrema_persistence_histogram",
     "mtf",
     "gdf",
     "multi_scale_rp",
     "multi_scale_conv",
-    "tpa",
+    "window_attention",
+    "tpa",  # deprecated alias
     "dtw_matrix",
     "sax",
+    "sax_symbols",
     "visibility_graph",
     "shapelet_transform",
     "matrix_profile",
@@ -1142,6 +1557,7 @@ __all__ = [
     "register_encoder",
     "get_encoder",
     "ENCODER_REGISTRY",
+    "BUILTIN_ENCODERS",
     "NanPolicy",
 ]
 

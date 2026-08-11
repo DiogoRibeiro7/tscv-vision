@@ -141,54 +141,133 @@ class ViTAdapter(nn.Module):  # pragma: no cover - heavy ops
         return out[0]
 
 
-class MambaEncoder(nn.Module):  # pragma: no cover - optional dependency
-    """Wrapper around the Mamba sequence model.
+class _SequenceModelEncoder(nn.Module):  # pragma: no cover - optional dependency
+    """Shared plumbing for wrappers around ``(batch, length, d_model)`` models.
 
-    Requires the ``mamba-ssm`` package and PyTorch to be installed."""
+    A univariate series has one channel, but sequence models such as Mamba and
+    RetNet expect ``d_model`` channels per time step. A learned linear
+    projection lifts each scalar sample into the model dimension; the encoder
+    output is then mean-pooled over time to give one vector per series.
+    """
 
-    def __init__(self, dim: int = 64) -> None:
+    def __init__(self, dim: int) -> None:
         _ensure_torch()
+        super().__init__()
+        if dim < 1:
+            raise ValueError("dim must be >= 1")
+        self.dim = dim
+        self.input_proj = nn.Linear(1, dim)
+
+    def _backbone(self, x: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map ``(batch, length)`` or ``(batch, length, 1)`` to ``(batch, dim)``.
+
+        Raises
+        ------
+        ValueError
+            If the input is not 2D/3D or its channel axis is not ``1``.
+        """
+
+        if x.ndim == 2:
+            x = x.unsqueeze(-1)
+        elif x.ndim != 3:
+            raise ValueError("input must have shape (batch, length[, 1])")
+        if x.shape[-1] != 1:
+            raise ValueError(
+                f"expected a univariate series with 1 channel, got {x.shape[-1]}; "
+                "project multivariate inputs yourself before calling this encoder"
+            )
+        hidden = self.input_proj(x)  # (B, L, dim)
+        out = self._backbone(hidden)  # (B, L, dim)
+        return out.mean(dim=1)
+
+    def encode(self, seq: Array) -> Array:
+        """Encode a 1D series into a ``(dim,)`` feature vector."""
+
+        _ensure_torch()
+        arr = np.asarray(seq, dtype=np.float32)
+        if arr.ndim != 1:
+            raise ValueError("seq must be 1D")
+        tens = torch.from_numpy(arr).view(1, -1, 1)
+        with torch.no_grad():
+            out = self.forward(tens).cpu().numpy()
+        return out[0]
+
+
+class MambaEncoder(_SequenceModelEncoder):  # pragma: no cover - optional dependency
+    """Wrapper around a single Mamba block.
+
+    Requires the ``mamba-ssm`` package and PyTorch. The block is constructed
+    with the upstream signature ``Mamba(d_model, d_state, d_conv, expand)``
+    (state-spaces/mamba) and consumes ``(batch, length, d_model)`` tensors.
+
+    Parameters
+    ----------
+    dim:
+        Model dimension ``d_model``.
+    d_state, d_conv, expand:
+        Forwarded to the upstream block; defaults match upstream.
+    """
+
+    def __init__(
+        self,
+        dim: int = 64,
+        *,
+        d_state: int = 16,
+        d_conv: int = 4,
+        expand: int = 2,
+    ) -> None:
         try:  # pragma: no cover - executed only when mamba available
             from mamba_ssm import Mamba  # type: ignore
         except Exception as exc:  # pragma: no cover
             raise ImportError("mamba-ssm is required for MambaEncoder") from exc
-        super().__init__()
-        self.model = Mamba(d_model=dim, n_layers=1)
+        super().__init__(dim)
+        self.model = Mamba(d_model=dim, d_state=d_state, d_conv=d_conv, expand=expand)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def _backbone(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
-    def encode(self, seq: Array) -> Array:
-        _ensure_torch()
-        tens = torch.from_numpy(seq.astype(np.float32)).unsqueeze(0).unsqueeze(0)
-        with torch.no_grad():
-            out = self.forward(tens).mean(dim=1).cpu().numpy()
-        return out[0]
 
+class RetNetEncoder(_SequenceModelEncoder):  # pragma: no cover - optional dependency
+    """Wrapper around a RetNet backbone.
 
-class RetNetEncoder(nn.Module):  # pragma: no cover - optional dependency
-    """Wrapper around the RetNet architecture.
+    Requires a ``retnet`` package exposing ``RetNet(d_model=..., layers=...)``
+    (or ``n_layers``) and consuming ``(batch, length, d_model)`` tensors. The
+    constructor signature differs between the available RetNet packages, so
+    the supported keywords are probed at construction time and a clear error
+    is raised if none matches.
 
-    Requires the ``retnet`` package and PyTorch."""
+    Parameters
+    ----------
+    dim:
+        Model dimension.
+    layers:
+        Number of stacked blocks.
+    """
 
-    def __init__(self, dim: int = 64) -> None:
-        _ensure_torch()
+    def __init__(self, dim: int = 64, *, layers: int = 1) -> None:
         try:  # pragma: no cover - executed when retnet available
             from retnet import RetNet  # type: ignore
         except Exception as exc:  # pragma: no cover
             raise ImportError("retnet is required for RetNetEncoder") from exc
-        super().__init__()
-        self.model = RetNet(d_model=dim, n_layers=1)
+        super().__init__(dim)
+        errors: list[str] = []
+        for kwargs in ({"layers": layers}, {"n_layers": layers}, {"num_layers": layers}):
+            try:
+                self.model = RetNet(d_model=dim, **kwargs)
+                break
+            except TypeError as exc:  # pragma: no cover - depends on package
+                errors.append(f"{kwargs}: {exc}")
+        else:  # pragma: no cover - depends on package
+            raise TypeError(
+                "could not construct RetNet with any known layer-count keyword; "
+                "tried " + "; ".join(errors)
+            )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def _backbone(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
-
-    def encode(self, seq: Array) -> Array:
-        _ensure_torch()
-        tens = torch.from_numpy(seq.astype(np.float32)).unsqueeze(0).unsqueeze(0)
-        with torch.no_grad():
-            out = self.forward(tens).mean(dim=1).cpu().numpy()
-        return out[0]
 
 
 def contrastive_loss(z1: torch.Tensor, z2: torch.Tensor, temperature: float = 0.1) -> torch.Tensor:

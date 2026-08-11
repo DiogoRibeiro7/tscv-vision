@@ -141,25 +141,72 @@ def gradient_histogram(img: Array, bins: int = 16) -> Array:
     return h.astype(float)
 
 
-def _lbp_codes(img: Array, radius: int) -> np.ndarray:
+#: Number of sampling points used by the LBP operators in this module.
+_LBP_POINTS = 8
+
+
+def _lbp_offsets(radius: float, points: int = _LBP_POINTS) -> Array:
+    """Return ``(points, 2)`` ``(row, col)`` offsets on a circle of ``radius``.
+
+    Sampling follows the standard :math:`LBP_{P,R}` convention of Ojala et al.
+    (2002): point ``p`` sits at angle :math:`2\\pi p / P` measured
+    counter-clockwise from the positive column axis, so bit ``0`` is the
+    neighbour at ``(0, +R)``. This matches ``skimage.feature.
+    local_binary_pattern``.
+    """
+
+    angles = 2.0 * np.pi * np.arange(points, dtype=float) / points
+    rows = -radius * np.sin(angles)
+    cols = radius * np.cos(angles)
+    offs = np.stack([rows, cols], axis=1)
+    # Snap near-integer offsets (axis-aligned points) so that they are sampled
+    # exactly instead of interpolated between two rows/columns 1e-16 apart.
+    rounded = np.round(offs)
+    return cast(Array, np.where(np.abs(offs - rounded) < 1e-9, rounded, offs))
+
+
+def _bilinear_sample(padded: Array, rows: Array, cols: Array) -> Array:
+    """Bilinearly sample ``padded`` on the grid ``rows`` x ``cols``."""
+
+    h, w = padded.shape
+    r0 = np.floor(rows).astype(np.intp)
+    c0 = np.floor(cols).astype(np.intp)
+    wr = (rows - r0)[:, None]
+    wc = (cols - c0)[None, :]
+    r1 = np.minimum(r0 + 1, h - 1)
+    c1 = np.minimum(c0 + 1, w - 1)
+    v00 = padded[np.ix_(r0, c0)]
+    v01 = padded[np.ix_(r0, c1)]
+    v10 = padded[np.ix_(r1, c0)]
+    v11 = padded[np.ix_(r1, c1)]
+    top = v00 * (1.0 - wc) + v01 * wc
+    bottom = v10 * (1.0 - wc) + v11 * wc
+    return cast(Array, top * (1.0 - wr) + bottom * wr)
+
+
+def _lbp_codes(img: Array, radius: int, points: int = _LBP_POINTS) -> np.ndarray:
+    """Return the :math:`LBP_{P,R}` code of every pixel of ``img``.
+
+    Neighbours are sampled on a circle of ``radius`` using bilinear
+    interpolation, so ``radius`` genuinely changes the sampling geometry.
+    Out-of-image neighbours use reflected padding.
+    """
+
     if img.ndim != 2:
         raise ValueError("img must be 2D")
-    padded = np.pad(img, radius, mode="reflect")
+    if radius < 1:
+        raise ValueError("radius must be >= 1")
+    if points < 1 or points > 16:
+        raise ValueError("points must be in [1, 16]")
+    pad = int(math.ceil(radius))
+    padded = np.pad(np.asarray(img, dtype=float), pad, mode="reflect")
     H, W = img.shape
+    rows = np.arange(H, dtype=float) + pad
+    cols = np.arange(W, dtype=float) + pad
+    center = padded[pad : pad + H, pad : pad + W]
     codes = np.zeros((H, W), dtype=np.uint16)
-    offs = [
-        (-1, -1),
-        (-1, 0),
-        (-1, 1),
-        (0, 1),
-        (1, 1),
-        (1, 0),
-        (1, -1),
-        (0, -1),
-    ]
-    center = padded[radius : radius + H, radius : radius + W]
-    for bit, (dy, dx) in enumerate(offs):
-        nbr = padded[radius + dy : radius + dy + H, radius + dx : radius + dx + W]
+    for bit, (dr, dc) in enumerate(_lbp_offsets(float(radius), points)):
+        nbr = _bilinear_sample(padded, rows + dr, cols + dc)
         incr = np.left_shift((nbr >= center).astype(np.uint16), np.uint16(bit))
         codes |= incr
     return codes
@@ -168,12 +215,16 @@ def _lbp_codes(img: Array, radius: int) -> np.ndarray:
 def lbp(img: Array, radius: int = 1) -> Array:
     """Local Binary Pattern histogram (256 bins).
 
+    Implements :math:`LBP_{8,R}` with circular, bilinearly interpolated
+    sampling (Ojala et al., 2002). Increasing ``radius`` samples neighbours
+    further from the centre pixel and therefore yields different codes.
+
     Parameters
     ----------
     img:
         2D image array.
     radius:
-        Neighbourhood radius for the LBP operator.
+        Neighbourhood radius for the LBP operator; must be ``>= 1``.
 
     Returns
     -------
@@ -183,7 +234,7 @@ def lbp(img: Array, radius: int = 1) -> Array:
     Raises
     ------
     ValueError
-        If ``img`` is not 2D.
+        If ``img`` is not 2D or ``radius < 1``.
     """
 
     codes = _lbp_codes(img, radius)
@@ -191,13 +242,14 @@ def lbp(img: Array, radius: int = 1) -> Array:
     return h.astype(float)
 
 
-def _lbp_rotation_map() -> np.ndarray:
-    mapping = np.empty(256, dtype=np.uint8)
-    for i in range(256):
-        bits = [(i >> r) & 1 for r in range(8)]
-        rotations = [
-            sum(bits[(k + shift) % 8] << (7 - k) for k in range(8)) for shift in range(8)
-        ]
+def _lbp_rotation_map(points: int = _LBP_POINTS) -> np.ndarray:
+    """Map each code to the smallest code in its bitwise-rotation orbit."""
+
+    n_codes = 1 << points
+    mask = n_codes - 1
+    mapping = np.empty(n_codes, dtype=np.uint16)
+    for i in range(n_codes):
+        rotations = [((i >> s) | (i << (points - s))) & mask for s in range(points)]
         mapping[i] = min(rotations)
     return mapping
 
@@ -232,16 +284,26 @@ def lbp_ri(img: Array, radius: int = 1) -> Array:
     return h.astype(float)
 
 
-def _lbp_uniform_map() -> tuple[np.ndarray, int]:
-    mapping = np.full(256, 255, dtype=np.uint8)
-    idx = 0
-    for i in range(256):
-        bits = [(i >> r) & 1 for r in range(8)]
-        transitions = sum(bits[r] != bits[(r + 1) % 8] for r in range(8))
+def _lbp_uniform_map(points: int = _LBP_POINTS) -> tuple[np.ndarray, int]:
+    """Map uniform codes to consecutive bins and all others to a shared bin.
+
+    Returns the lookup table plus the total number of bins. For ``points=8``
+    there are 58 uniform patterns, so bin ``58`` collects the non-uniform ones
+    and the histogram has 59 bins.
+    """
+
+    n_codes = 1 << points
+    uniform: list[int] = []
+    for i in range(n_codes):
+        bits = [(i >> r) & 1 for r in range(points)]
+        transitions = sum(bits[r] != bits[(r + 1) % points] for r in range(points))
         if transitions <= 2:
-            mapping[i] = idx
-            idx += 1
-    return mapping, idx + 1  # extra bin for non-uniform patterns
+            uniform.append(i)
+    non_uniform_bin = len(uniform)
+    mapping = np.full(n_codes, non_uniform_bin, dtype=np.uint16)
+    for bin_idx, code in enumerate(uniform):
+        mapping[code] = bin_idx
+    return mapping, non_uniform_bin + 1  # extra bin for non-uniform patterns
 
 
 _LBP_UNI_MAP, _LBP_UNI_BINS = _lbp_uniform_map()
@@ -251,7 +313,8 @@ def lbp_uniform(img: Array, radius: int = 1) -> Array:
     """Uniform LBP histogram.
 
     Only patterns with at most two 0-1 transitions are counted as
-    individual bins; all others share a single non-uniform bin.
+    individual bins; all others share the final non-uniform bin
+    (index ``_LBP_UNI_BINS - 1``).
 
     Parameters
     ----------
@@ -263,7 +326,8 @@ def lbp_uniform(img: Array, radius: int = 1) -> Array:
     Returns
     -------
     ndarray
-        Normalized histogram of shape ``(_LBP_UNI_BINS,)``.
+        Normalized histogram of shape ``(_LBP_UNI_BINS,)``. The histogram
+        covers every pixel, so ``h.sum() == 1`` when scaled by the bin width.
 
     Raises
     ------
@@ -699,6 +763,72 @@ FEATURES_REGISTRY: dict[str, FeatureFunc] = {
 }
 
 
+def feature_layout(
+    bins: int = 32, selected: Iterable[str] | None = None
+) -> dict[str, int]:
+    """Return the number of values each registered extractor contributes.
+
+    The total dimensionality of :func:`extract_feature_vector` depends on
+    ``bins`` **and on which optional dependencies are installed** (for example
+    ``wavelet`` needs PyWavelets and is skipped otherwise). Rather than
+    hard-coding a number, query it:
+
+    >>> layout = feature_layout(bins=16)
+    >>> layout["intensity"], layout["hist"]
+    (6, 16)
+    >>> sum(layout.values()) == feature_vector_length(bins=16)
+    True
+
+    Parameters
+    ----------
+    bins:
+        Histogram bins for the features that accept them.
+    selected:
+        Feature names to include; defaults to every extractor that is usable
+        in the current environment.
+
+    Returns
+    -------
+    dict
+        Mapping of feature name to output size, in concatenation order.
+        Extractors whose optional dependency is missing are omitted unless
+        they were explicitly requested (in which case the ImportError
+        propagates).
+
+    Raises
+    ------
+    KeyError
+        If a requested name is not registered.
+    """
+
+    probe = np.zeros((8, 8), dtype=float)
+    names = _resolve_feature_names(selected)
+    layout: dict[str, int] = {}
+    for name in names:
+        try:
+            layout[name] = int(FEATURES_REGISTRY[name](probe, bins).size)
+        except ImportError:
+            if selected is not None:
+                raise
+    return layout
+
+
+def feature_vector_length(bins: int = 32, selected: Iterable[str] | None = None) -> int:
+    """Length of :func:`extract_feature_vector` output for one channel."""
+
+    return int(sum(feature_layout(bins, selected).values()))
+
+
+def _resolve_feature_names(selected: Iterable[str] | None) -> list[str]:
+    if selected is None:
+        return list(FEATURES_REGISTRY)
+    names = list(selected)
+    for name in names:
+        if name not in FEATURES_REGISTRY:
+            raise KeyError(name)
+    return names
+
+
 def extract_feature_vector(
     img: Array, bins: int = 32, selected: Iterable[str] | None = None
 ) -> Array:
@@ -716,16 +846,23 @@ def extract_feature_vector(
     Returns
     -------
     Array
-        Concatenated feature vector.
+        Concatenated feature vector of length
+        ``feature_vector_length(bins, selected)`` per channel. Use
+        :func:`feature_layout` to see the breakdown — the size depends on
+        ``bins`` and on the installed optional dependencies, so do not assume
+        a fixed number.
+
+    Raises
+    ------
+    KeyError
+        If a requested feature name is not registered.
+    ValueError
+        If ``img`` is neither 2D nor 3D.
+    RuntimeError
+        If no extractor produced output.
     """
 
-    if selected is None:
-        names = list(FEATURES_REGISTRY)
-    else:
-        names = list(selected)
-        for name in names:
-            if name not in FEATURES_REGISTRY:
-                raise KeyError(name)
+    names = _resolve_feature_names(selected)
 
     if img.ndim == 2:
         channels = [img]
@@ -975,6 +1112,8 @@ __all__ = [
     "autoencoder_features",
     "extract_feature_vector",
     "extract_batch",
+    "feature_layout",
+    "feature_vector_length",
     "scale_features",
     "rank_features",
     "select_top_k",

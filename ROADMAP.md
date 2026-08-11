@@ -1,49 +1,82 @@
 # Roadmap
 
-> Last updated: 2026-04-12
+> Last updated: 2026-08-10 (0.2.0)
 
 This roadmap tracks what has shipped, what is next, and the long-term vision
 for **tscv-vision**. Items are grouped by theme rather than strictly by
 version so that priorities stay clear as scope shifts.
 
+**Current stance: feature freeze.** The library already exposes more surface
+than its validation supports. Until the benchmark study below exists, new
+encoders and new subsystems are out of scope; correctness, evidence and
+documentation come first. Proposals for new features are welcome as issues but
+will be queued behind the v0.3.0 items.
+
 ---
 
 ## Completed
 
-Features that are implemented and available on `main`.
-
 ### Core encoders (v0.1.0 – present)
 
-- [x] GAF / GADF (Gramian Angular Fields)
+- [x] GAF / GADF (Gramian Angular Fields) — equivalence-tested against `pyts`
 - [x] Recurrence Plot (euclidean / manhattan, binary threshold)
 - [x] Spectrogram (STFT, Hann / rect windows)
 - [x] CWT (Morlet / mexh / ricker wavelets, PyWavelets fallback)
-- [x] Markov Transition Field (MTF)
+- [x] Markov Transition Field (MTF) — equivalence-tested against `pyts`
 - [x] DTW cost matrix
-- [x] SAX similarity matrix
-- [x] Persistence Image (topological approximation)
-- [x] Gradient Difference Field (GDF)
+- [x] SAX (standard Gaussian breakpoints since 0.2.0; quantile variant opt-in)
+- [x] Persistence diagram + persistence image — equivalence-tested against
+      `ripser` / `persim` (0.2.0; the pre-0.2.0 heuristic is now
+      `extrema_persistence_histogram`)
+- [x] Gramian Difference Field (GDF)
 - [x] Multi-scale Recurrence Plot (MSRP)
 - [x] Multi-scale Convolutional encoder
-- [x] Temporal Pattern Attention (TPA)
+- [x] Window self-attention (named `tpa` before 0.2.0; it is not the Temporal
+      Pattern Attention architecture)
 - [x] Visibility Graph adjacency matrix
 - [x] Shapelet Transform distance maps
-- [x] Matrix Profile
+- [x] Matrix Profile — equivalence-tested against `stumpy`
 - [x] Random Projection Image
 - [x] Ensemble (stack / mean / weighted)
 
 ### Feature extraction & pipeline
 
-- [x] Intensity stats, histogram, gradient histogram, LBP
+- [x] Intensity stats, histogram, gradient histogram, LBP / LBP-RI /
+      LBP-uniform (circular sampling, matches scikit-image since 0.2.0)
+- [x] GLCM, Gabor, orientation, edge/contour/fractal, FFT/PSD/wavelet
+- [x] `feature_layout` / `feature_vector_length` for discoverable dimensionality
 - [x] Sliding-window helpers (stride-trick views)
 - [x] Multi-encoder fusion (concat, mean, median, weighted)
 - [x] Temporal aggregation for sliding features
 - [x] Custom encoder registry (`register_encoder` / `get_encoder`)
 - [x] CLI (`tscv-features`) with batch, parallel, and dry-run modes
 
+### Representation API (v0.2.0)
+
+- [x] `tscv_vision.representations`: one interface over deterministic,
+      fitted and pretrained representations, with adapters for every
+      registered encoder and optional scikit-learn wrappers
+- [x] `RepresentationInfo` provenance metadata — family, reference,
+      complexity, canonical-vs-project-defined, validation level — with
+      construction-time checks that it cannot over-claim
+- [x] Registry filtering by provenance and validation level
+- [x] `docs/encoder_validation.md` generated from the metadata, kept
+      current by a test
+
+### Evaluation & statistics (v0.2.0)
+
+- [x] `tscv_vision.stats`: Welch t-test, Wilcoxon signed-rank, Friedman,
+      Nemenyi critical difference, Holm correction — all validated against
+      `scipy.stats`
+- [x] `tscv_vision.evaluation`: UCR/UEA harness with predefined splits, frozen
+      raw outputs, environment manifest and multi-dataset comparison
+- [x] Leakage-safe model selection: `FeatureSelector` inside CV folds,
+      `AdaptivePipeline.nested_score`, `AutoTSCV.nested_score`
+
 ### Integrations
 
-- [x] scikit-learn `SklearnFeatureTransformer`
+- [x] scikit-learn `SklearnFeatureTransformer` (genuinely subclasses the
+      sklearn bases since 0.2.0)
 - [x] PyTorch `TorchFeatureDataset`
 - [x] TensorFlow generator dataset
 - [x] ONNX tensor export (`to_onnx_tensor` / `save_onnx`)
@@ -55,146 +88,123 @@ Features that are implemented and available on `main`.
 
 - [x] Cython extensions (GAF, recurrence, STFT)
 - [x] Optional Numba JIT path for GAF
-- [x] CuPy GPU encoder (GAF) with automatic fallback
+- [x] CuPy GPU encoder (GAF) with automatic fallback, batched sliding-window path
 
 ### Quality & tooling
 
+- [x] `nan_policy` on every public encoder (`raise` / `omit` / `interpolate` /
+      `forward_fill`) with per-policy tests
 - [x] Pre-commit hooks (ruff, mypy --strict)
-- [x] GitHub Actions CI (tests, linting, Codecov)
-- [x] 43 test files with `gpu`, `slow`, `optional` markers
+- [x] GitHub Actions CI with separate jobs for core, optional integrations,
+      reference equivalence and the benchmark harness
+- [x] Property, regression and reproducibility tests alongside unit tests
+- [x] Definition tests for every scientific encoder
+- [x] Documentation-sync test (signatures, feature dimensions, registry keys,
+      version consistency)
+- [x] Version aligned across `pyproject.toml`, `setup.py` and `__version__`
 
 ---
 
-## v0.2.0 – Stability & correctness
+## v0.3.0 – Evidence
 
-**Theme:** Make the library robust enough for real-world data before adding
-more features. Everything here is a prerequisite for a v1.0 claim.
+**Theme:** Produce the experimental results the current API surface would need
+to be defensible. Nothing else ships until this does.
 
-### NaN / missing-data handling *(high priority)*
+### Benchmark study
 
-- [ ] Add a `nan_policy` parameter to `_validate_series`:
-      `"raise"` (current default), `"omit"`, `"interpolate"`, `"fill"`
-- [ ] Propagate `nan_policy` through all public encoder functions
-- [ ] Add tests for each policy (constant NaN, leading/trailing, scattered)
-- [ ] Document behaviour in the API reference and troubleshooting guide
+- [ ] Run the harness over 30+ UCR/UEA datasets and commit the frozen
+      `results.csv`, `manifest.json` and `summary.md` under `results/`
+- [ ] Add ROCKET / MiniRocket as a strong baseline (via `pyts`) to the default
+      method set once it is part of a committed run
+- [ ] Ablations: encoder alone, feature subsets, encoder + raw, ensemble,
+      feature selection on/off
+- [ ] Runtime and peak-memory tables as a function of series length
+      (128 / 256 / 512 / 1024 / 4096)
+- [ ] NumPy vs Numba vs Cython vs GPU under controlled hardware, with the
+      hardware recorded in the manifest
+- [ ] Robustness sweeps: additive noise, missingness under each `nan_policy`,
+      irregular lengths
 
-### Version & packaging hygiene
+### Remaining validation gaps
 
-- [ ] Align version between `pyproject.toml` (0.1.1) and `setup.py` (0.10.0)
-      — use a single source of truth (`importlib.metadata` or `__version__`)
-- [ ] Add `py.typed` marker for PEP 561 compliance
-- [ ] Tag a proper release on GitHub with CHANGELOG entry
+Read `docs/encoder_validation.md` for the current per-encoder status.
 
-### Edge-case hardening
+- [ ] Raise `cwt` above LEVEL 0: the Morlet path is a bespoke FFT
+      implementation with no numerical comparison against Torrence & Compo
+      or PyWavelets
+- [ ] Raise the LEVEL 1 encoders (`gdf`, `msrp`, `msc`, `randproj`,
+      `shapelet`, `eph`) to LEVEL 2 with tests against their defining
+      formula, or retire them
+- [ ] Numerical validation for the domain modules, or demote them to examples
+- [ ] Decide the fate of thin/unvalidated subsystems (`irregular.py`,
+      parts of `multimodal.py`, the neural adapters that have no upstream
+      package installed in CI): validate, document as experimental, or remove
 
-- [ ] Define and document minimum input length per encoder
-- [ ] Handle zero-length arrays gracefully (return empty with correct shape)
-- [ ] Validate multichannel inputs with mismatched lengths
-- [ ] Add property-based tests (Hypothesis) for encoder shape invariants
+### API hygiene
 
-### Platform & install notes
-
-- [ ] Document Windows / WSL / macOS Cython build caveats
-- [ ] Add a `--no-cython` install path for pure-Python fallback
-- [ ] Test against Python 3.12 in CI matrix
-
----
-
-## v0.3.0 – Documentation & usability
-
-**Theme:** Lower the barrier to adoption. A library with 20 encoders but thin
-examples is hard to evaluate.
-
-### Encoder selection guide
-
-- [ ] "When to use which encoder" decision table (signal type → encoder)
-- [ ] Algorithm reference cards: one paragraph + key formula + citation per
-      encoder (GAF → Zhiguang Wang 2015, RP → Eckmann 1987, etc.)
-
-### Examples & tutorials
-
-- [ ] End-to-end Jupyter notebook: ECG classification with GAF + sklearn
-- [ ] End-to-end notebook: vibration anomaly detection with RP + PyTorch
-- [ ] CLI cookbook: common one-liners for batch feature extraction
-- [ ] Streaming tutorial: real-time encoding with `StreamingEncoder`
-
-### API surface cleanup
-
-- [ ] Audit thin / stub modules (`irregular.py` is 26 LOC) — either flesh out
-      or fold into the module they extend
-- [ ] Consolidate ONNX export: current `save_onnx` only serialises raw
-      tensors; add a proper model graph export if feasible, or document the
-      limitation clearly
-- [ ] Add `__all__` consistency check in CI (ensure public API matches docs)
+- [ ] Remove the 0.2.0 deprecation aliases (`tpa`, `TSHAPExplainer`,
+      `cross_causal_lag`, `bias_report`) in 0.3.0 as announced
+- [ ] `__all__` consistency check in CI (public API matches the docs)
+- [ ] `py.typed` marker for PEP 561 compliance
+- [ ] Document minimum input length per encoder and enforce it uniformly
+- [ ] Property-based tests (Hypothesis) for encoder shape invariants
 
 ---
 
-## v0.4.0 – Performance & scale
+## v0.4.0 – Documentation & usability
 
-**Theme:** Make large-scale and real-time workloads first-class.
+**Theme:** Lower the barrier to adoption, grounded in the v0.3.0 evidence.
 
-### Benchmarking
+- [ ] "When to use which encoder" decision table, backed by benchmark results
+      rather than intuition
+- [ ] Algorithm reference cards: one paragraph, key formula and citation per
+      encoder
+- [ ] End-to-end notebook: classification with GAF + scikit-learn, using
+      nested CV
+- [ ] End-to-end notebook: anomaly detection with recurrence plots
+- [ ] CLI cookbook and a streaming tutorial
+- [ ] API reference published (Sphinx or mkdocs)
+- [ ] Platform notes: Windows / WSL / macOS Cython build caveats
+- [ ] Python 3.12 in the CI matrix
 
-- [ ] Reproducible benchmark suite against UCR/UEA archive subsets
-- [ ] Publish throughput & memory numbers for each encoder at common sizes
-      (128, 256, 512, 1024, 4096)
-- [ ] Compare against pyts, tslearn, and tsfresh on overlapping encoders
-- [ ] Integrate `benchmark.py` results into CI as a regression gate
+---
 
-### GPU acceleration
+## v0.5.0 – Performance & scale
+
+**Theme:** Make large-scale and real-time workloads first-class, measured
+against the v0.3.0 baselines.
 
 - [ ] Extend CuPy encoders beyond GAF (recurrence plot, spectrogram, MTF)
-- [ ] Add multi-GPU support for batch encoding
 - [ ] Benchmark CPU vs GPU crossover point by series length
-
-### Streaming & backpressure
-
-- [ ] Add buffer-size limits and overflow policy to `StreamingEncoder`
-- [ ] Quantify and publish latency guarantees (p50 / p99) for `safe_encode`
-- [ ] Add async iterator interface for integration with asyncio event loops
-
-### Algorithmic improvements
-
-- [ ] Vectorise `visibility_graph` (currently O(N³) nested Python loops)
-- [ ] Vectorise `matrix_profile` (currently O(N²) Python loop; consider
-      STOMP or SCRIMP approach)
-- [ ] Add chunked computation for large recurrence plots (memory O(N) instead
-      of O(N²))
+- [ ] Chunked recurrence plots (memory O(N) instead of O(N²))
+- [ ] Faster matrix profile (STOMP or SCRIMP++ instead of the O(N²) pairwise
+      distance matrix)
+- [ ] Buffer-size limits and an overflow policy for `StreamingEncoder`
+- [ ] Publish p50 / p99 latency for `safe_encode`
+- [ ] Async iterator interface for asyncio integration
+- [ ] Benchmark regression gate in CI
 
 ---
 
-## v0.5.0 – Extensibility
+## v0.6.0 – Extensibility
 
-**Theme:** Let users and downstream libraries plug in without forking.
-
-### Plugin system
-
-- [ ] Entry-point based encoder discovery (`tscv_vision.encoders` group)
-- [ ] Entry-point based feature extractor discovery
-- [ ] Plugin template repository / cookiecutter
+- [ ] Entry-point based encoder and feature-extractor discovery
 - [ ] Validate plugin contracts at registration time (input/output shapes)
-
-### Domain modules
-
-- [ ] Stabilise `domains/` API — currently 8 domain modules with varying
-      maturity; define a consistent interface per domain
-- [ ] Add domain-specific encoder presets (e.g., `finance.default_pipeline()`)
-- [ ] Allow domain modules to be installed as separate extras
+- [ ] Plugin template repository
+- [ ] Stabilise the `domains/` API behind one consistent interface
+- [ ] Ship domain modules as separate extras
 
 ---
 
 ## v1.0.0 – Production-ready release
 
-**Theme:** Commitment to API stability, documentation completeness, and
-community confidence.
-
 ### Release gates
 
-- [ ] All v0.2–v0.5 items resolved or explicitly deferred with rationale
-- [ ] Test coverage ≥ 90% on core (`encoders`, `features`, `sliding`)
-- [ ] Every public function has a docstring with Parameters, Returns, Raises,
-      and at least one Example
-- [ ] API reference auto-generated and published (Sphinx or mkdocs)
+- [ ] All v0.3–v0.6 items resolved or explicitly deferred with rationale
+- [ ] Test coverage ≥ 90% on core (`encoders`, `features`, `sliding`, `stats`)
+- [ ] Every public function has Parameters, Returns, Raises and an Example
+- [ ] Every named scientific method has an equivalence test or an explicit
+      "new / approximate variant" label
 - [ ] Semantic versioning enforced; CHANGELOG maintained per release
 - [ ] Security review: no `eval`, no arbitrary file writes, dependencies pinned
 
@@ -202,23 +212,20 @@ community confidence.
 
 - [ ] CONTRIBUTING.md with DCO or CLA, issue templates, PR template
 - [ ] Publish to PyPI with classifiers and project URLs
-- [ ] Blog post or short paper: "Computer-vision features for time series"
-- [ ] Engage time-series community (TSDatasets, sktime, aeon interop)
+- [ ] Software paper built on the v0.3.0 evidence, claiming the framework and
+      its measured properties — not novelty for GAF, MTF, RP, SAX, shapelets,
+      persistence images or attention, all of which predate this project
+- [ ] Interop with the time-series ecosystem (sktime, aeon, pyts)
 
 ---
 
 ## Future directions (post-v1.0)
 
-Ideas that are worth exploring but not committed to a release.
-
 - **Learnable encoders**: end-to-end differentiable image encoding (PyTorch)
-- **Transformer-based features**: ViT patch embeddings as feature vectors
 - **Multi-variate native encoders**: cross-channel recurrence, cross-GAF
-- **Federated / privacy-preserving pipelines**: encode locally, aggregate
-  features centrally
 - **WebAssembly build**: run encoders in the browser for interactive demos
 - **Pre-computed encoder galleries**: visual catalogue of encoder outputs on
-  canonical datasets for quick reference
+  canonical datasets
 
 ---
 

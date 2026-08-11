@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from tscv_vision.analytics import (
+    OcclusionExplainer,
     TSHAPExplainer,
     gaf_attribution,
     generate_counterfactual,
@@ -16,11 +17,11 @@ matplotlib.use("Agg")
 pytestmark = pytest.mark.optional
 
 
-def test_tshap_explainer_shapes_and_errors() -> None:
+def test_occlusion_explainer_shapes_and_errors() -> None:
     def model(x: np.ndarray) -> float:
         return float(x.mean())
 
-    explainer = TSHAPExplainer(model)
+    explainer = OcclusionExplainer(model)
     t_imp, f_imp = explainer.explain(np.arange(8.0), window=4)
     assert t_imp.shape == (8,)
     assert f_imp.ndim == 1
@@ -51,3 +52,12 @@ def test_generate_counterfactual_changes_prediction() -> None:
     series = np.zeros(4)
     cf = generate_counterfactual(series, model, target=1.0, step=0.5, max_iter=50)
     assert model(cf) == pytest.approx(1.0, abs=1e-2)
+
+
+def test_tshap_alias_is_deprecated() -> None:
+    def model(x: np.ndarray) -> float:
+        return float(x.mean())
+
+    with pytest.warns(DeprecationWarning, match="OcclusionExplainer"):
+        explainer = TSHAPExplainer(model)
+    assert isinstance(explainer, OcclusionExplainer)

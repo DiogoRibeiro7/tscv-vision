@@ -177,8 +177,8 @@ class TestEncoderNanPolicy:
         img = encoders.sax(signal_with_nans, nan_policy="interpolate")
         assert np.all(np.isfinite(img))
 
-    def test_tpa_interpolate(self, signal_with_nans: np.ndarray) -> None:
-        img = encoders.tpa(signal_with_nans, nan_policy="interpolate")
+    def test_window_attention_interpolate(self, signal_with_nans: np.ndarray) -> None:
+        img = encoders.window_attention(signal_with_nans, nan_policy="interpolate")
         assert np.all(np.isfinite(img))
 
     def test_visibility_graph_forward_fill(

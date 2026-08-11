@@ -47,13 +47,15 @@ def map_dask(func: Callable[[T], R], data: Iterable[T], workers: int | None = No
 
     try:
         import dask
-        from dask import delayed
+        from dask import delayed  # type: ignore[attr-defined]
     except Exception as exc:  # pragma: no cover - import error
         raise ImportError("dask is required for map_dask") from exc
 
     delayed_tasks = [delayed(func)(d) for d in data]
     scheduler = "processes" if workers not in (None, 1) else "single-threaded"
-    results = dask.compute(*delayed_tasks, scheduler=scheduler, num_workers=workers)
+    results = dask.compute(  # type: ignore[attr-defined, no-untyped-call]
+        *delayed_tasks, scheduler=scheduler, num_workers=workers
+    )
     return list(results)
 
 

@@ -19,6 +19,7 @@ __all__ = [
     "dataset",
     "domains",
     "encoders",
+    "evaluation",
     "features",
     "fusion",
     "gpu",
@@ -30,7 +31,9 @@ __all__ = [
     "neural",
     "parallel",
     "pipeline",
+    "representations",
     "research",
+    "stats",
     "streaming",
     "WindowedDataset",
     "AutoTSCV",
@@ -68,5 +71,5 @@ def __getattr__(name: str) -> ModuleType | Any:  # pragma: no cover - exercised 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 

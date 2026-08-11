@@ -6,6 +6,7 @@ from tscv_vision.neural import (
     AttentionFusion,
     TorchCNNEncoder,
     ViTAdapter,
+    _SequenceModelEncoder,
     contrastive_loss,
     nas_random_search,
     style_transfer,
@@ -66,3 +67,39 @@ def test_nas_random_search() -> None:
         return float(4 - x)
     best = nas_random_search(space, eval_fn)
     assert best == 3
+
+
+class _IdentitySequenceEncoder(_SequenceModelEncoder):
+    """Stands in for Mamba/RetNet so the shared plumbing is testable."""
+
+    def _backbone(self, x: torch.Tensor) -> torch.Tensor:
+        return x
+
+
+def test_sequence_encoder_projects_scalars_into_model_dim() -> None:
+    enc = _IdentitySequenceEncoder(dim=8)
+    series = np.linspace(0.0, 1.0, 40, dtype=np.float32)
+    vec = enc.encode(series)
+    # One vector of size `dim` per series, regardless of series length.
+    assert vec.shape == (8,)
+    assert np.all(np.isfinite(vec))
+    longer = enc.encode(np.linspace(0.0, 1.0, 137, dtype=np.float32))
+    assert longer.shape == (8,)
+
+
+def test_sequence_encoder_batch_shapes() -> None:
+    enc = _IdentitySequenceEncoder(dim=4)
+    assert enc(torch.randn(3, 20)).shape == (3, 4)
+    assert enc(torch.randn(3, 20, 1)).shape == (3, 4)
+
+
+def test_sequence_encoder_rejects_bad_inputs() -> None:
+    enc = _IdentitySequenceEncoder(dim=4)
+    with pytest.raises(ValueError, match="1 channel"):
+        enc(torch.randn(2, 10, 3))
+    with pytest.raises(ValueError, match="batch, length"):
+        enc(torch.randn(2, 3, 4, 5))
+    with pytest.raises(ValueError, match="1D"):
+        enc.encode(np.zeros((2, 4), dtype=np.float32))
+    with pytest.raises(ValueError, match="dim"):
+        _IdentitySequenceEncoder(dim=0)

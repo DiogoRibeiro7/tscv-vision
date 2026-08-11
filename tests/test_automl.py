@@ -1,27 +1,7 @@
-import importlib.util
-import sys
-import types
-from pathlib import Path
-
 import numpy as np
 
-BASE = Path(__file__).resolve().parents[1] / "src" / "tscv_vision"
-package = types.ModuleType("tscv_vision")
-package.__path__ = [str(BASE)]  # type: ignore[attr-defined]
-sys.modules["tscv_vision"] = package
+from tscv_vision import automl
 
-for name in ["encoders", "features"]:
-    spec = importlib.util.spec_from_file_location(f"tscv_vision.{name}", BASE / f"{name}.py")
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[f"tscv_vision.{name}"] = module
-    spec.loader.exec_module(module)  # type: ignore[assignment]
-
-spec = importlib.util.spec_from_file_location("tscv_vision.automl", BASE / "automl.py")
-assert spec and spec.loader
-automl = importlib.util.module_from_spec(spec)
-sys.modules["tscv_vision.automl"] = automl
-spec.loader.exec_module(automl)  # type: ignore[assignment]
 AutoTSCV = automl.AutoTSCV
 
 

@@ -181,7 +181,7 @@ def benchmark_sliding_gaf(
     hop: int = 32,
     repeats: int = 3,
     use_gpu: bool = True,
-) -> dict[str, float]:
+) -> dict[str, float | None]:
     """Benchmark ``encode_sliding`` with GAF on CPU vs batched GPU path.
 
     Parameters

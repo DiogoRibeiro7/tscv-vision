@@ -23,6 +23,9 @@ stay small.
   gradient histograms, Local Binary Patterns, and batch extraction.
 - Sliding-window pipelines for long 1D or multichannel signals.
 - CLI for `.npy` inputs with metadata-rich `.npz` outputs.
+- Leakage-safe evaluation: nested cross-validation helpers, SciPy-free
+  statistical tests, and a UCR/UEA benchmark harness that freezes its raw
+  outputs.
 - Optional extras for analytics, GPU acceleration, neural integrations, MLOps,
   and domain adapters.
 - Release-ready packaging with PyPI Trusted Publishing and Zenodo metadata.
@@ -40,11 +43,22 @@ Install optional extras only when needed:
 | Extra | Command | Purpose |
 | --- | --- | --- |
 | `cli` | `pip install "tscv-vision[cli]"` | YAML configuration files |
+| `ml` | `pip install "tscv-vision[ml]"` | scikit-learn transformer, pipelines, model selection |
+| `research` | `pip install "tscv-vision[research]"` | Benchmark harness, including the ROCKET baseline |
 | `analytics` | `pip install "tscv-vision[analytics]"` | SHAP, LIME, UMAP, plotting, wavelets |
 | `domains` | `pip install "tscv-vision[domains]"` | Domain adapters backed by scikit-learn |
+| `speed` | `pip install "tscv-vision[speed]"` | Numba JIT encoder paths |
 | `gpu` | `pip install "tscv-vision[gpu]"` | CuPy-accelerated encoder paths |
+| `io` | `pip install "tscv-vision[io]"` | Arrow / Parquet / HDF5 readers and writers |
+| `streaming` | `pip install "tscv-vision[streaming]"` | Redis, Kafka and RabbitMQ stream sources |
+| `distributed` | `pip install "tscv-vision[distributed]"` | Dask-backed parallel map |
 | `mlops` | `pip install "tscv-vision[mlops]"` | FastAPI, Prometheus, Feast integrations |
 | `torch` | `pip install "tscv-vision[torch]"` | Torch-based neural components |
+| `onnx` | `pip install "tscv-vision[onnx]"` | ONNX tensor export |
+
+Every optional import in the package belongs to one of these extras;
+`tests/test_docs_sync.py` fails the build if a new one appears without a
+documented install route.
 
 For local development:
 
@@ -124,13 +138,30 @@ include `window_starts`, `win_len`, `hop`, and encoded image stacks.
 
 ### Encoders
 
+Every encoder accepts a `nan_policy` and is reachable by registry name through
+`encoders.get_encoder(name)`.
+
 | Encoder | Function or name | Output |
 | --- | --- | --- |
 | GAF | `encoders.gaf(x, method="summation")` or `gaf` | `(N, N)` |
 | GADF | `encoders.gaf(x, method="difference")` or `gadf` | `(N, N)` |
 | Recurrence plot | `encoders.recurrence_plot(x)` or `rp` | `(N, N)` |
 | Spectrogram | `encoders.spectrogram(x)` or `spec` | `(F, T)` |
-| Continuous wavelet | `cwt` | `(scales, N)` |
+| Continuous wavelet | `encoders.cwt(x, scales)` or `cwt` | `(scales, N)` |
+| Markov Transition Field | `encoders.mtf(x)` or `mtf` | `(N, N)` |
+| Gramian Difference Field | `encoders.gdf(x)` or `gdf` | `(N, N)` |
+| Persistence diagram | `encoders.persistence_diagram(x)` | `(n_pairs, 2)` |
+| Persistence image | `encoders.persistence_image(x, bins)` or `ph` | `(bins, bins)` |
+| Extrema persistence histogram | `encoders.extrema_persistence_histogram(x)` or `eph` | `(bins, bins)` |
+| SAX image | `encoders.sax(x)` or `sax` | `(segments, segments)` |
+| DTW cost matrix | `encoders.dtw_matrix(x)` or `dtw` | `(N, N)` |
+| Visibility graph | `encoders.visibility_graph(x)` or `vg` | `(N, N)` |
+| Matrix profile | `encoders.matrix_profile(x, m)` or `mp` | `(N - m + 1,)` |
+| Shapelet transform | `encoders.shapelet_transform(x, k)` or `shapelet` | `(k, N - L + 1)` |
+| Window attention | `encoders.window_attention(x, window)` or `attn` | `(W, W)` |
+| Multi-scale RP / conv | `msrp`, `msc` | stacked |
+| Random projection | `encoders.random_projection_image(x)` or `randproj` | `(size, size)` |
+| Ensemble | `encoders.ensemble(x, names)` or `ensemble` | stacked or averaged |
 
 ### Feature Extractors
 
@@ -139,13 +170,103 @@ include `window_starts`, `win_len`, `hop`, and encoded image stacks.
 | `features.intensity_stats(img)` | mean, std, min, max, skewness, kurtosis |
 | `features.histogram(img, bins=32)` | normalized intensity histogram |
 | `features.gradient_histogram(img, bins=16)` | Sobel-like gradient magnitude histogram |
-| `features.lbp(img, radius=1)` | Local Binary Pattern histogram |
+| `features.lbp(img, radius=1)` | LBP<sub>8,R</sub>, circular sampling, matches scikit-image |
+| `features.lbp_ri` / `features.lbp_uniform` | rotation-invariant and uniform variants |
+| `features.glcm_features`, `gabor_features`, `orientation_histogram` | texture and orientation |
+| `features.edge_density`, `contour_ratio`, `fractal_dimension` | shape descriptors |
+| `features.fft_features`, `power_spectral_density`, `wavelet_stats` | spectral descriptors |
 | `features.extract_feature_vector(img, bins=32)` | unified feature vector |
 | `features.extract_batch(images, bins=32)` | stacked feature matrix |
+
+The unified vector's length depends on `bins` **and** on which optional
+packages are installed, so query it rather than hard-coding it:
+
+```python
+from tscv_vision.features import feature_layout, feature_vector_length
+
+feature_vector_length(bins=32)   # 694 with core dependencies only
+feature_layout(bins=32)          # {'intensity': 6, 'hist': 32, 'lbp': 256, ...}
+```
+
+## Benchmarking
+
+`tscv_vision.evaluation` compares encoders against standard baselines
+(1-NN Euclidean, raw features, optionally ROCKET) on UCR/UEA datasets using
+their predefined train/test splits. It writes one CSV row per
+`(dataset, method, seed)`, a manifest pinning package versions and the git
+commit, and a summary applying the Demšar (2006) procedure — Friedman test,
+average ranks, Nemenyi critical difference and Holm-corrected pairwise
+Wilcoxon tests.
+
+```bash
+python -m tscv_vision.evaluation --archive /data/UCRArchive_2018 --out results/ucr
+```
+
+The archive is not redistributable and is not vendored here. See
+[docs/benchmarks.md](docs/benchmarks.md).
+
+For model selection, prefer the nested-CV entry points — they re-run the whole
+selection procedure inside each outer fold, so the reported score is not
+contaminated by the choices it evaluates:
+
+```python
+pipe.nested_score(X, y)      # AdaptivePipeline
+auto.nested_score(X, y)      # AutoTSCV
+```
+
+## Representations
+
+`tscv_vision.representations` puts one interface over every encoder and lets
+you select them by scientific provenance rather than by name:
+
+```python
+from tscv_vision.representations import get_representation, list_representations
+
+rep = get_representation("gaf", image_size=32)
+image = rep.transform(series)          # (32, 32) whatever the series length
+
+rep.info.canonical_method              # True — reproduces Wang & Oates (2015)
+rep.info.validation_level.label        # 'LEVEL 3 — reference'
+
+# Build an experiment from methods that are actually validated:
+list_representations(canonical_method=True, min_validation_level=3)
+# ['gadf', 'gaf', 'mp', 'mtf', 'ph']
+```
+
+Every representation carries a `RepresentationInfo` with its family, reference,
+complexity, and a validation level from 0 (smoke-tested) to 4 (benchmarked on
+real data). The dataclass refuses to claim more than the tests deliver: marking
+something canonical without a reference, or above smoke level without naming
+the tests that back it, raises at construction.
+
+The three interfaces — `Representation`, `FittedRepresentation`,
+`PretrainedRepresentation` — are kept apart because they have different leakage
+profiles. A fitted representation refuses to transform before `fit`, and
+`as_sklearn()` wraps any of them so the fitting happens inside a cross-validation
+fold. scikit-learn is not required to use them.
+
+See [docs/encoder_validation.md](docs/encoder_validation.md) for the per-encoder
+matrix, generated from the metadata.
+
+## Scientific Naming Policy
+
+A function carries the name of a published method only when it implements that
+method **and** has a test pinning it to a reference implementation
+(`tests/test_reference_equivalence.py`, checked against scikit-image, SciPy,
+pyts, ripser, persim and stumpy) or to its published formula
+(`tests/test_encoder_definitions.py`). Everything else is named descriptively,
+and its docstring states what it is and what it is not.
+
+Six names changed in 0.2.0 under this policy — `persistence_image`, `tpa`,
+`TSHAPExplainer`, `cross_causal_lag`, `bias_report` and `add_dp_noise`. The old
+names keep working until 0.3.0 and emit `DeprecationWarning`. See the
+[changelog](CHANGELOG.md) for the reasoning behind each.
 
 ## Documentation
 
 - [API reference](docs/api.md)
+- [Encoder validation matrix](docs/encoder_validation.md)
+- [Benchmarks](docs/benchmarks.md)
 - [Deployment guide](docs/deployment.md)
 - [Performance guide](docs/performance.md)
 - [Release checklist](docs/release-checklist.md)
@@ -162,8 +283,15 @@ poetry install
 poetry run pre-commit run --all-files
 poetry run ruff check .
 poetry run mypy src
-poetry run pytest -q
+poetry run pytest -q                   # core suite
+poetry run pytest -m optional          # optional integrations
+poetry run pytest -m optional tests/test_reference_equivalence.py
 ```
+
+The default `pytest` invocation excludes the `optional`, `slow` and `gpu`
+markers; CI runs each in its own job so a regression in the optional
+integrations cannot hide behind the default marker expression. See
+[docs/test-matrix.md](docs/test-matrix.md).
 
 Build and check distribution artifacts:
 

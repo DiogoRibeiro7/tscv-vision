@@ -485,7 +485,8 @@ def redis_stream(key: str, host: str = "localhost", port: int = 6379) -> Iterato
     client = redis.Redis(host=host, port=port)
     last_id = "$"
     while True:  # pragma: no cover - infinite generator
-        resp = client.xread({key: last_id}, block=0)
+        # xread is typed as returning Awaitable on the async client too.
+        resp: Any = client.xread({key: last_id}, block=0)
         if resp:
             _, messages = resp[0]
             for msg_id, fields in messages:

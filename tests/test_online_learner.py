@@ -1,20 +1,6 @@
-import importlib.util
-import pathlib
-import sys
-import types
-
 import numpy as np
 
-PKG_PATH = pathlib.Path(__file__).resolve().parents[1] / "src" / "tscv_vision"
-pkg = types.ModuleType("tscv_vision")
-pkg.__path__ = [str(PKG_PATH)]
-sys.modules["tscv_vision"] = pkg
-spec = importlib.util.spec_from_file_location("tscv_vision.streaming", PKG_PATH / "streaming.py")
-_mod = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-sys.modules["tscv_vision.streaming"] = _mod
-spec.loader.exec_module(_mod)
-OnlineLearner = _mod.OnlineLearner
+from tscv_vision.streaming import OnlineLearner
 
 
 def test_online_learner_learns_identity() -> None:

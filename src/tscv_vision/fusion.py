@@ -21,7 +21,9 @@ def fuse(
     Parameters
     ----------
     features_list:
-        Sequence of arrays with identical shape ``(N, D)``.
+        Sequence of arrays with identical shape. Both feature matrices
+        ``(N, D)`` and single feature vectors ``(D,)`` are accepted;
+        concatenation always happens along the last axis.
     mode:
         Fusion strategy: ``"concat"`` stacks feature dimensions, while
         ``"mean"``, ``"median"``, and ``"weighted"`` aggregate across encoder
@@ -33,8 +35,9 @@ def fuse(
     Returns
     -------
     Array
-        Fused feature array with shape ``(N, D * M)`` for ``"concat"`` where
-        ``M`` is the number of encoders, otherwise ``(N, D)``.
+        Fused feature array. ``"concat"`` widens the last axis by a factor
+        of ``M``, the number of inputs; the other modes preserve the input
+        shape.
     """
 
     if len(features_list) == 0:
@@ -45,7 +48,7 @@ def fuse(
         raise ValueError("All feature arrays must share the same shape")
 
     if mode == "concat":
-        return cast(Array, np.concatenate(arrs, axis=1))
+        return cast(Array, np.concatenate(arrs, axis=-1))
 
     stack = np.stack(arrs, axis=0)
     if mode == "mean":

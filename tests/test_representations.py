@@ -212,10 +212,25 @@ def test_registry_covers_every_builtin_encoder() -> None:
     assert set(list_representations(include_aliases=True)) == set(encoders.BUILTIN_ENCODERS)
 
 
+def _transform_or_skip(name: str, series: np.ndarray) -> np.ndarray:
+    """Transform, skipping when the encoder needs an uninstalled extra.
+
+    A missing optional dependency is a fact about the environment, not a
+    defect; `info.optional_dependency` records which ones can be absent.
+    """
+
+    try:
+        return get_representation(name).transform(series)
+    except ImportError as exc:
+        required = get_representation_info(name).optional_dependency
+        assert required, f"{name} raised ImportError but declares no dependency"
+        pytest.skip(f"{name} needs {required}: {exc}")
+
+
 @pytest.mark.parametrize("name", list_representations())
 def test_every_representation_transforms(name: str, series: np.ndarray) -> None:
     rep = get_representation(name)
-    out = rep.transform(series)
+    out = _transform_or_skip(name, series)
     assert isinstance(out, np.ndarray)
     assert out.size > 0
     assert np.all(np.isfinite(out))
@@ -224,9 +239,23 @@ def test_every_representation_transforms(name: str, series: np.ndarray) -> None:
 
 @pytest.mark.parametrize("name", list_representations())
 def test_every_representation_is_deterministic(name: str, series: np.ndarray) -> None:
-    first = get_representation(name).transform(series)
+    first = _transform_or_skip(name, series)
     second = get_representation(name).transform(series)
     np.testing.assert_array_equal(first, second)
+
+
+def test_optional_dependencies_are_declared() -> None:
+    """Anything that can raise ImportError must say which package it needs."""
+
+    series = np.sin(np.linspace(0, 12 * np.pi, 128))
+    for name in list_representations():
+        info = get_representation_info(name)
+        try:
+            get_representation(name).transform(series)
+        except ImportError:
+            assert info.optional_dependency, (
+                f"{name} raised ImportError but declares no optional_dependency"
+            )
 
 
 def test_get_representation_forwards_kwargs() -> None:

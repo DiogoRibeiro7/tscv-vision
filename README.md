@@ -148,6 +148,7 @@ Every encoder accepts a `nan_policy` and is reachable by registry name through
 | Recurrence plot | `encoders.recurrence_plot(x)` or `rp` | `(N, N)` |
 | Spectrogram | `encoders.spectrogram(x)` or `spec` | `(F, T)` |
 | Continuous wavelet | `encoders.cwt(x, scales)` or `cwt` | `(scales, N)` |
+| Synchrosqueezed CWT | `encoders.synchrosqueezed_cwt(x, fs=...)` or `sst` | `(frequencies, N)` |
 | Markov Transition Field | `encoders.mtf(x)` or `mtf` | `(N, N)` |
 | Gramian Difference Field | `encoders.gdf(x)` or `gdf` | `(N, N)` |
 | Persistence diagram | `encoders.persistence_diagram(x)` | `(n_pairs, 2)` |

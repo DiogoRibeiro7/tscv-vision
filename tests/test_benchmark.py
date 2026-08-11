@@ -30,3 +30,19 @@ def test_benchmark_pipeline() -> None:
     stats = benchmark_pipeline(pipe, X, track_mem=True)
     assert {"throughput", "latency"}.issubset(stats)
     assert "peak_mem_mib" in stats
+
+
+def test_benchmark_time_frequency_reports_all_transforms() -> None:
+    from tscv_vision.benchmark import benchmark_time_frequency
+
+    results = benchmark_time_frequency(repeats=1, frequencies=32)
+    assert set(results) == {"spectrogram", "cwt", "synchrosqueezed_cwt"}
+    for metrics in results.values():
+        assert metrics["seconds"] > 0.0
+        assert metrics["peak_mib"] > 0.0
+        assert 0.0 <= metrics["sparsity"] <= 1.0
+        assert 0.0 < metrics["concentration"] <= 1.0
+    # Reassignment is the point: energy lands in fewer bins than the CWT.
+    assert (
+        results["synchrosqueezed_cwt"]["concentration"] > results["cwt"]["concentration"]
+    )

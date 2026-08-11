@@ -1242,6 +1242,239 @@ tpa = deprecated_alias(
 )
 
 
+#: Fourier-domain analytic wavelets available to the synchrosqueezed transform.
+SSTWavelet = Literal["morlet", "bump"]
+
+
+def _analytic_wavelet_hat(omega: Array, wavelet: SSTWavelet, mu: float) -> Array:
+    """Fourier transform of an analytic mother wavelet, evaluated at ``omega``.
+
+    Analytic (one-sided) wavelets are required for synchrosqueezing: the phase
+    derivative of the transform only estimates instantaneous frequency when the
+    negative-frequency half is suppressed.
+    """
+
+    hat = np.zeros_like(omega)
+    positive = omega > 0
+    if wavelet == "morlet":
+        # Torrence & Compo normalisation, restricted to omega > 0.
+        hat[positive] = np.pi**-0.25 * math.sqrt(2.0) * np.exp(
+            -0.5 * (omega[positive] - mu) ** 2
+        )
+    elif wavelet == "bump":
+        # Compactly supported bump wavelet (Daubechies et al., 2011).
+        sigma = 1.0
+        scaled = (omega - mu) / sigma
+        inside = positive & (np.abs(scaled) < 1.0)
+        hat[inside] = np.exp(1.0 - 1.0 / (1.0 - scaled[inside] ** 2))
+    else:  # pragma: no cover - guarded by the caller
+        raise ValueError(f"unknown wavelet {wavelet!r}")
+    return hat
+
+
+def _default_sst_scales(n: int, dt: float, voices: int) -> Array:
+    """Dyadic log-spaced scales covering the resolvable band of an ``n``-sample series."""
+
+    smallest = 2.0 * dt
+    largest = n * dt / 4.0
+    if largest <= smallest:
+        return np.array([smallest], dtype=float)
+    n_octaves = math.log2(largest / smallest)
+    count = int(math.ceil(n_octaves * voices)) + 1
+    grid: Array = smallest * 2.0 ** (np.arange(count, dtype=float) / voices)
+    return grid
+
+
+def synchrosqueezed_cwt(
+    x: Array,
+    *,
+    fs: float = 1.0,
+    scales: Array | None = None,
+    wavelet: SSTWavelet = "morlet",
+    frequencies: int = 64,
+    voices: int = 32,
+    threshold: float | None = None,
+    magnitude: bool = True,
+    log_scale: bool = False,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    r"""Synchrosqueezed continuous wavelet transform.
+
+    A time-frequency image that is sharper than either a spectrogram or a
+    plain CWT, because coefficient energy is *reassigned* along the frequency
+    axis to the instantaneous frequency it actually represents rather than
+    left smeared across the wavelet's bandwidth.
+
+    This is not a renamed :func:`cwt`. The three steps are:
+
+    1. an analytic (one-sided) complex CWT
+       :math:`W(a, b) = \int x(t)\,\overline{\psi\!\left(\frac{t-b}{a}\right)}\,
+       \frac{\mathrm{d}t}{a}`;
+    2. a phase-derivative estimate of instantaneous frequency,
+       :math:`\omega(a, b) = \frac{1}{2\pi}\,
+       \mathrm{Im}\!\left(\frac{\partial_b W(a, b)}{W(a, b)}\right)`,
+       computed exactly in the Fourier domain rather than by finite
+       differences;
+    3. synchrosqueezing, which sums each coefficient into the frequency bin
+       containing :math:`\omega(a, b)`,
+       :math:`T(\omega_l, b) = \sum_{a_k \in \Omega_l} W(a_k, b)\,
+       a_k^{-1/2}\,\Delta(\log a)`,
+       the reassignment measure for a log-spaced scale grid.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    fs:
+        Sampling frequency in Hz; must be positive. The output frequency axis
+        is in the same units.
+    scales:
+        Positive wavelet scales in seconds. Defaults to a dyadic log-spaced
+        grid spanning the resolvable band, which is what the reassignment
+        measure above assumes; pass your own only if it is also log-spaced.
+    wavelet:
+        ``"morlet"`` or ``"bump"``. Both are analytic, as synchrosqueezing
+        requires.
+    frequencies:
+        Number of bins on the output frequency axis, ``>= 2``. The axis is
+        linear from ``fs / N`` to the Nyquist frequency ``fs / 2``.
+    voices:
+        Scales per octave in the default grid, ``>= 1``. More voices give a
+        finer reassignment at proportional cost.
+    threshold:
+        Coefficients with ``|W| <= threshold`` contribute nothing, because
+        the phase derivative is numerically meaningless where there is no
+        energy. Defaults to ``1e-8 * max|W|``. Pass ``0.0`` to disable, at the
+        cost of noise in silent regions.
+    magnitude:
+        If ``True`` (default) return ``|T|`` normalised to ``[0, 1]``. If
+        ``False`` return the complex ``T``, which is invertible but cannot be
+        fed to the image feature extractors.
+    log_scale:
+        Apply ``log1p`` to the normalised magnitude and renormalise, which
+        makes weak ridges visible. Ignored when ``magnitude`` is ``False``.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(frequencies, N)`` image, indexed ``[frequency, time]``. Real and in
+        ``[0, 1]`` when ``magnitude`` is ``True``, complex otherwise.
+
+    Raises
+    ------
+    ValueError
+        If ``fs`` is not positive, ``frequencies < 2``, ``voices < 1``,
+        ``threshold`` is negative, ``scales`` are not positive, the wavelet is
+        unknown, or ``x`` is invalid.
+
+    Notes
+    -----
+    **Complexity** ``O(S · N log N)`` time for ``S`` scales, ``O(S · N)``
+    memory. The default grid uses ``S ≈ voices · log2(N / 8)`` scales.
+
+    **Invariances** Equivariant to time shift (the image shifts with the
+    signal) and, because the magnitude is max-normalised, invariant to
+    amplitude scaling. It is *not* invariant to resampling: the frequency axis
+    is tied to ``fs``.
+
+    **Information lost** The magnitude form discards phase, so the series
+    cannot be recovered; use ``magnitude=False`` to keep it. Reassignment is
+    quantised to the frequency grid, and components closer together than the
+    wavelet bandwidth are not separated — synchrosqueezing sharpens ridges, it
+    does not increase the underlying resolution.
+
+    **Use cases** Signals with time-varying frequency content where a
+    spectrogram is too blurred to read: chirps, machine run-ups, biomedical
+    rhythms.
+
+    References
+    ----------
+    Daubechies, Lu & Wu (2011), "Synchrosqueezed wavelet transforms: an
+    empirical mode decomposition-like tool", Applied and Computational
+    Harmonic Analysis 30(2):243-261.  Thakur, Brevdo, Fučkar & Wu (2013), "The
+    synchrosqueezing algorithm for time-varying spectral analysis", Signal
+    Processing 93(5):1079-1094.
+
+    Examples
+    --------
+    >>> fs = 200.0
+    >>> t = np.arange(1024) / fs
+    >>> img = synchrosqueezed_cwt(np.sin(2 * np.pi * 20.0 * t), fs=fs, frequencies=128)
+    >>> img.shape
+    (128, 1024)
+    """
+
+    series = _validate_series(x, nan_policy=nan_policy)
+    if not math.isfinite(fs) or fs <= 0:
+        raise ValueError("fs must be a positive, finite sampling frequency")
+    if frequencies < 2:
+        raise ValueError("frequencies must be >= 2")
+    if voices < 1:
+        raise ValueError("voices must be >= 1")
+    if threshold is not None and (not math.isfinite(threshold) or threshold < 0):
+        raise ValueError("threshold must be non-negative and finite")
+    if wavelet not in {"morlet", "bump"}:
+        raise ValueError("wavelet must be 'morlet' or 'bump'")
+
+    n = series.size
+    dt = 1.0 / fs
+    if scales is None:
+        scale_grid = _default_sst_scales(n, dt, voices)
+    else:
+        scale_grid = np.asarray(scales, dtype=float)
+        if scale_grid.ndim != 1 or scale_grid.size == 0 or np.any(scale_grid <= 0):
+            raise ValueError("scales must be a non-empty 1D array of positive values")
+    dlog = math.log(2.0) / voices if scale_grid.size > 1 else 1.0
+
+    mu = 6.0 if wavelet == "morlet" else 5.0
+    spectrum = np.fft.fft(series)
+    xi = 2.0 * np.pi * np.fft.fftfreq(n, d=dt)  # angular frequency, rad/s
+
+    transform = np.empty((scale_grid.size, n), dtype=complex)
+    derivative = np.empty((scale_grid.size, n), dtype=complex)
+    for k, scale in enumerate(scale_grid):
+        psi_hat = _analytic_wavelet_hat(scale * xi, wavelet, mu)
+        product = spectrum * psi_hat
+        transform[k] = np.fft.ifft(product)
+        # d/db of the transform is exact in the Fourier domain.
+        derivative[k] = np.fft.ifft(1j * xi * product)
+
+    peak = float(np.max(np.abs(transform)))
+    cutoff = 1e-8 * peak if threshold is None else float(threshold)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        inst_freq = np.imag(derivative / transform) / (2.0 * np.pi)
+    usable = (np.abs(transform) > cutoff) & np.isfinite(inst_freq)
+
+    f_min = fs / n
+    f_max = fs / 2.0
+    f_grid = np.linspace(f_min, f_max, frequencies)
+    df = f_grid[1] - f_grid[0]
+
+    squeezed = np.zeros((frequencies, n), dtype=complex)
+    with np.errstate(invalid="ignore"):
+        bins = np.round((inst_freq - f_min) / df)
+    usable &= np.isfinite(bins) & (bins >= 0) & (bins <= frequencies - 1)
+    if np.any(usable):
+        weights = scale_grid**-0.5 * dlog
+        rows, cols = np.nonzero(usable)
+        np.add.at(
+            squeezed,
+            (bins[usable].astype(np.intp), cols),
+            transform[usable] * weights[rows],
+        )
+
+    if not magnitude:
+        return cast(Array, squeezed)
+    image = np.abs(squeezed)
+    image = image / (np.max(image) + 1e-12)
+    if log_scale:
+        image = np.log1p(image)
+        image = image / (np.max(image) + 1e-12)
+    return cast(Array, image)
+
+
 def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     """Natural visibility graph adjacency matrix.
 
@@ -1501,6 +1734,7 @@ register_encoder("gadf", lambda x: gaf(x, method="difference"))
 register_encoder("rp", recurrence_plot)
 register_encoder("spec", spectrogram)
 register_encoder("cwt", cwt)
+register_encoder("sst", synchrosqueezed_cwt)
 register_encoder("ph", persistence_image)
 register_encoder("eph", extrema_persistence_histogram)
 register_encoder("mtf", mtf)
@@ -1537,6 +1771,8 @@ __all__ = [
     "recurrence_plot",
     "spectrogram",
     "cwt",
+    "synchrosqueezed_cwt",
+    "SSTWavelet",
     "persistence_diagram",
     "persistence_image",
     "extrema_persistence_histogram",

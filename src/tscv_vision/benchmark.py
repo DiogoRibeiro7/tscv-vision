@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tracemalloc
+from collections.abc import Callable
 from time import perf_counter
 
 import numpy as np
@@ -235,11 +236,98 @@ def benchmark_sliding_gaf(
     }
 
 
+def _participation_ratio(image: Array) -> float:
+    """Energy concentration: the share of total energy in the strongest bins.
+
+    Larger means the same energy occupies fewer bins, which is exactly what
+    reassignment is supposed to buy.
+    """
+
+    flat = np.abs(np.asarray(image, dtype=float)).ravel()
+    total = flat.sum()
+    if total <= 0:
+        return 0.0
+    normalised = flat / total
+    return float(np.sum(normalised**2))
+
+
+def benchmark_time_frequency(
+    x: Array | None = None,
+    *,
+    fs: float = 200.0,
+    repeats: int = 3,
+    frequencies: int = 128,
+    sparsity_threshold: float = 0.01,
+) -> dict[str, dict[str, float]]:
+    """Compare the spectrogram, CWT and synchrosqueezed CWT on one signal.
+
+    Parameters
+    ----------
+    x:
+        Input series. Defaults to a linear chirp, whose instantaneous
+        frequency is known, so that concentration is measured on a signal the
+        transforms are supposed to resolve.
+    fs:
+        Sampling frequency in Hz.
+    repeats:
+        Timing repetitions; the minimum is reported, being the least noisy
+        estimator of the achievable time.
+    frequencies:
+        Output frequency bins for the transforms that take a grid.
+    sparsity_threshold:
+        Fraction of the peak below which a bin counts as empty.
+
+    Returns
+    -------
+    dict
+        ``{name: {"seconds", "peak_mib", "sparsity", "concentration"}}`` where
+        ``sparsity`` is the fraction of bins below the threshold.
+    """
+
+    from . import encoders as _enc
+
+    if x is None:
+        t = np.arange(2048) / fs
+        x = np.sin(2 * np.pi * (10.0 * t + 0.5 * 10.0 * t**2))
+    series = np.asarray(x, dtype=float)
+    scales = np.linspace(1.0, 64.0, frequencies)
+
+    transforms: dict[str, Callable[[], Array]] = {
+        "spectrogram": lambda: _enc.spectrogram(series, win=128, hop=16),
+        "cwt": lambda: _enc.cwt(series, scales),
+        "synchrosqueezed_cwt": lambda: _enc.synchrosqueezed_cwt(
+            series, fs=fs, frequencies=frequencies
+        ),
+    }
+
+    results: dict[str, dict[str, float]] = {}
+    for name, func in transforms.items():
+        tracemalloc.start()
+        best = float("inf")
+        image = None
+        for _ in range(max(1, repeats)):
+            start = perf_counter()
+            image = func()
+            best = min(best, perf_counter() - start)
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert image is not None
+        magnitude = np.abs(image)
+        results[name] = {
+            "seconds": best,
+            "peak_mib": peak / (1024**2),
+            "sparsity": float(np.mean(magnitude <= sparsity_threshold * magnitude.max())),
+            "concentration": _participation_ratio(magnitude),
+        }
+    return results
+
+
 __all__ = [
     "benchmark_streaming",
     "benchmark_pipeline",
     "benchmark_encoder",
     "benchmark_sliding_gaf",
+    "benchmark_time_frequency",
 ]
 
 

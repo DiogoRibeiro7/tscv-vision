@@ -248,7 +248,7 @@ def list_representations(
     Examples
     --------
     >>> list_representations(family="time_frequency", trainable=False)
-    ['cwt', 'spec']
+    ['cwt', 'spec', 'sst']
     >>> list_representations(min_validation_level=ValidationLevel.REFERENCE)
     ['gadf', 'gaf', 'mp', 'mtf', 'ph', 'sax']
     """

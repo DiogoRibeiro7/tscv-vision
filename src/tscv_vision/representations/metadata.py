@@ -191,6 +191,7 @@ _SST = "tests/test_synchrosqueezed.py"
 _HVG = "tests/test_horizontal_visibility.py"
 _OTF = "tests/test_ordinal_transition.py"
 _DED = "tests/test_delay_embedding_density.py"
+_MTS = "tests/test_multitaper.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -282,6 +283,29 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
             "whose normalisation has not been compared against Torrence & Compo "
             "or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising "
             "this to REFERENCE is a v0.3.0 item."
+        ),
+    ),
+    "mtspec": _info(
+        name="mtspec",
+        family="time_frequency",
+        input_kind="univariate",
+        output_kind="time_frequency",
+        canonical_method=True,
+        reference=(
+            "Thomson (1982), Spectrum estimation and harmonic analysis, "
+            "Proc. IEEE 70(9):1055-1096"
+        ),
+        complexity="O(K * F * n_fft log n_fft) for K tapers and F frames",
+        validation_level=ValidationLevel.REFERENCE,
+        validated_by=(
+            f"{_MTS}::test_single_taper_matches_a_direct_periodogram",
+            f"{_MTS}::test_variance_falls_roughly_as_one_over_k",
+            f"{_MTS}::test_tapers_are_scipy_dpss",
+        ),
+        notes=(
+            "Requires SciPy for the DPSS tapers, which are the method itself; "
+            "no approximation is substituted. Trades frequency resolution for "
+            "variance: tones closer than 2NW/window_size are not separated."
         ),
     ),
     "sst": _info(
@@ -679,7 +703,7 @@ def list_encoders(
     >>> list_encoders(family="gramian")
     ['gadf', 'gaf', 'gdf']
     >>> list_encoders(canonical_method=True, min_validation_level=ValidationLevel.REFERENCE)
-    ['gadf', 'gaf', 'mp', 'mtf', 'ph']
+    ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
     """
 
     names = []

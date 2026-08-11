@@ -33,6 +33,7 @@ kafka-python = {version = "*", optional = true}
 pika = {version = "*", optional = true}
 onnx = {version = "*", optional = true}
 pyts = {version = ">=0.13", optional = true}
+scipy = {version = ">=1.10", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7"
@@ -75,6 +76,8 @@ streaming = ["redis", "kafka-python", "pika"]
 # Distributed map via dask.
 distributed = ["dask"]
 onnx = ["onnx"]
+# DPSS tapers for the multitaper spectrogram.
+spectral = ["scipy"]
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]

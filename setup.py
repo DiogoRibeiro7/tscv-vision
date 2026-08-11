@@ -76,6 +76,7 @@ setup(
         "streaming": ["redis>=5", "kafka-python", "pika"],
         "distributed": ["dask>=2024.1"],
         "onnx": ["onnx"],
+        "spectral": ["scipy>=1.10"],
     },
     entry_points={
         "console_scripts": [

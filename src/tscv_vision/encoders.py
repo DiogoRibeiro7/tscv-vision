@@ -1518,6 +1518,183 @@ def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     return cast(Array, adj)
 
 
+SpectralScaling = Literal["power", "log_power"]
+
+
+def multitaper_spectrogram(
+    x: Array,
+    *,
+    fs: float = 1.0,
+    window_size: int = 128,
+    hop_length: int | None = None,
+    time_bandwidth: float = 3.5,
+    n_tapers: int | None = None,
+    n_fft: int | None = None,
+    scaling: SpectralScaling = "log_power",
+    dynamic_range: float = 80.0,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    r"""Multitaper spectrogram using DPSS (Slepian) tapers.
+
+    A lower-variance alternative to :func:`spectrogram`. A single tapered
+    periodogram is an inconsistent estimator: its variance does not shrink as
+    the window grows. Thomson's method averages :math:`K` periodograms taken
+    with orthogonal Slepian tapers, which are the sequences with maximal
+    energy concentration in a bandwidth :math:`NW`, reducing variance by
+    roughly :math:`1/K` while widening the effective resolution to
+    :math:`2NW/W`.
+
+    .. math::
+
+        \hat{S}(f) = \frac{1}{K} \sum_{k=0}^{K-1}
+        \left| \sum_{t} h_k[t]\, x[t]\, e^{-2\pi i f t} \right|^2
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    fs:
+        Sampling frequency in Hz; positive. Used only to document the
+        frequency axis, which spans ``0`` to ``fs / 2``.
+    window_size:
+        Samples per analysis window, ``>= 2`` and ``<= N``.
+    hop_length:
+        Step between windows; defaults to ``window_size // 4``.
+    time_bandwidth:
+        The product :math:`NW`, ``>= 1``. Larger values allow more tapers and
+        so lower variance, at the cost of a wider main lobe.
+    n_tapers:
+        Number of tapers :math:`K`. Defaults to ``int(2 * NW) - 1``, the
+        conventional choice — beyond it the tapers leak badly and adding them
+        increases bias faster than it reduces variance. Must be in
+        ``[1, window_size]``.
+    n_fft:
+        FFT length, defaults to ``window_size``. Larger values interpolate the
+        frequency axis; they do not add resolution.
+    scaling:
+        ``"power"`` returns the averaged power spectrum. ``"log_power"``
+        (default) returns decibels relative to the peak, floored at
+        ``-dynamic_range``.
+    dynamic_range:
+        Decibels below the peak to retain before flooring, ``> 0``. Ignored
+        for ``"power"``.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(n_fft // 2 + 1, n_frames)`` image normalised to ``[0, 1]``, with
+        frequency increasing down the rows.
+
+    Raises
+    ------
+    ImportError
+        If SciPy is not installed. DPSS tapers are the defining ingredient;
+        approximating them with something easier would make this a different,
+        worse estimator under the same name.
+    ValueError
+        If any argument is out of range, or ``x`` is invalid.
+
+    Notes
+    -----
+    **Complexity** ``O(K · F · n_fft log n_fft)`` for ``F`` frames, plus
+    ``O(K · window_size)`` for the tapers, which are computed once.
+
+    **Invariances** Equivariant to time shift by whole hops. Invariant to
+    amplitude scaling, because the output is normalised by its own peak.
+
+    **Information lost** Phase, entirely. The dB form additionally discards
+    everything more than ``dynamic_range`` below the peak, and the taper
+    averaging deliberately trades frequency resolution for variance — two
+    tones closer than ``2 NW / window_size`` in normalised frequency will not
+    be separated.
+
+    **Use cases** Spectral estimation on noisy or short records, where a
+    single-taper spectrogram is too erratic to compare across windows.
+
+    References
+    ----------
+    Thomson (1982), "Spectrum estimation and harmonic analysis", Proceedings
+    of the IEEE 70(9):1055-1096.  Slepian (1978), "Prolate spheroidal wave
+    functions, Fourier analysis, and uncertainty V", Bell System Technical
+    Journal 57(5):1371-1430.
+
+    Examples
+    --------
+    >>> t = np.arange(512) / 100.0
+    >>> img = multitaper_spectrogram(np.sin(2 * np.pi * 10 * t), fs=100.0,
+    ...                              window_size=128)
+    >>> img.shape
+    (65, 13)
+    """
+
+    series = _validate_series(x, nan_policy=nan_policy)
+    if not math.isfinite(fs) or fs <= 0:
+        raise ValueError("fs must be a positive, finite sampling frequency")
+    if window_size < 2:
+        raise ValueError("window_size must be >= 2")
+    if window_size > series.size:
+        raise ValueError(
+            f"window_size={window_size} exceeds the series length {series.size}"
+        )
+    step = window_size // 4 if hop_length is None else int(hop_length)
+    if step < 1:
+        raise ValueError("hop_length must be >= 1")
+    if not math.isfinite(time_bandwidth) or time_bandwidth < 1:
+        raise ValueError("time_bandwidth (NW) must be finite and >= 1")
+    tapers_wanted = int(2 * time_bandwidth) - 1 if n_tapers is None else int(n_tapers)
+    if tapers_wanted < 1:
+        raise ValueError(
+            f"n_tapers must be >= 1; the default int(2 * NW) - 1 gives "
+            f"{tapers_wanted} at time_bandwidth={time_bandwidth}, so raise NW "
+            "or set n_tapers explicitly"
+        )
+    if tapers_wanted > window_size:
+        raise ValueError("n_tapers cannot exceed window_size")
+    length = window_size if n_fft is None else int(n_fft)
+    if length < window_size:
+        raise ValueError("n_fft must be at least window_size")
+    if scaling not in {"power", "log_power"}:
+        raise ValueError("scaling must be 'power' or 'log_power'")
+    if scaling == "log_power" and (not math.isfinite(dynamic_range) or dynamic_range <= 0):
+        raise ValueError("dynamic_range must be positive and finite")
+
+    try:
+        from scipy.signal.windows import dpss
+    except Exception as exc:  # pragma: no cover - optional dependency
+        raise ImportError(
+            "SciPy is required for multitaper_spectrogram: the DPSS tapers are "
+            "the method, and substituting an easier window would silently make "
+            "this a different estimator. Install with "
+            "`pip install 'tscv-vision[spectral]'`"
+        ) from exc
+
+    tapers = np.asarray(dpss(window_size, time_bandwidth, Kmax=tapers_wanted), dtype=float)
+
+    n_frames = 1 + (series.size - window_size) // step
+    frames = np.lib.stride_tricks.as_strided(
+        series,
+        shape=(n_frames, window_size),
+        strides=(series.strides[0] * step, series.strides[0]),
+        writeable=False,
+    )
+
+    # (K, frames, window) -> average |FFT|^2 over the taper axis.
+    tapered = frames[None, :, :] * tapers[:, None, :]
+    spectra = np.fft.rfft(tapered, n=length, axis=2)
+    power = np.mean(np.abs(spectra) ** 2, axis=0).T  # (freq, frames)
+
+    peak = float(power.max())
+    if peak <= 0:
+        return cast(Array, np.zeros_like(power))
+    if scaling == "power":
+        return cast(Array, power / peak)
+    decibels = 10.0 * np.log10(power / peak + 1e-300)
+    clipped = np.clip(decibels, -dynamic_range, 0.0)
+    return cast(Array, (clipped + dynamic_range) / dynamic_range)
+
+
 DensityMode = Literal["histogram", "gaussian"]
 
 
@@ -2289,6 +2466,7 @@ register_encoder("gaf", gaf)
 register_encoder("gadf", lambda x: gaf(x, method="difference"))
 register_encoder("rp", recurrence_plot)
 register_encoder("spec", spectrogram)
+register_encoder("mtspec", multitaper_spectrogram)
 register_encoder("cwt", cwt)
 register_encoder("sst", synchrosqueezed_cwt)
 register_encoder("ph", persistence_image)
@@ -2330,6 +2508,8 @@ __all__ = [
     "recurrence_plot",
     "spectrogram",
     "cwt",
+    "multitaper_spectrogram",
+    "SpectralScaling",
     "synchrosqueezed_cwt",
     "SSTWavelet",
     "persistence_diagram",

@@ -48,6 +48,7 @@ Install optional extras only when needed:
 | `analytics` | `pip install "tscv-vision[analytics]"` | SHAP, LIME, UMAP, plotting, wavelets |
 | `domains` | `pip install "tscv-vision[domains]"` | Domain adapters backed by scikit-learn |
 | `speed` | `pip install "tscv-vision[speed]"` | Numba JIT encoder paths |
+| `spectral` | `pip install "tscv-vision[spectral]"` | DPSS tapers for the multitaper spectrogram |
 | `gpu` | `pip install "tscv-vision[gpu]"` | CuPy-accelerated encoder paths |
 | `io` | `pip install "tscv-vision[io]"` | Arrow / Parquet / HDF5 readers and writers |
 | `streaming` | `pip install "tscv-vision[streaming]"` | Redis, Kafka and RabbitMQ stream sources |
@@ -147,6 +148,7 @@ Every encoder accepts a `nan_policy` and is reachable by registry name through
 | GADF | `encoders.gaf(x, method="difference")` or `gadf` | `(N, N)` |
 | Recurrence plot | `encoders.recurrence_plot(x)` or `rp` | `(N, N)` |
 | Spectrogram | `encoders.spectrogram(x)` or `spec` | `(F, T)` |
+| Multitaper spectrogram | `encoders.multitaper_spectrogram(x)` or `mtspec` | `(F, T)` |
 | Continuous wavelet | `encoders.cwt(x, scales)` or `cwt` | `(scales, N)` |
 | Synchrosqueezed CWT | `encoders.synchrosqueezed_cwt(x, fs=...)` or `sst` | `(frequencies, N)` |
 | Markov Transition Field | `encoders.mtf(x)` or `mtf` | `(N, N)` |
@@ -234,7 +236,7 @@ rep.info.validation_level.label        # 'LEVEL 3 — reference'
 
 # Build an experiment from methods that are actually validated:
 list_representations(canonical_method=True, min_validation_level=3)
-# ['gadf', 'gaf', 'mp', 'mtf', 'ph']
+# ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
 ```
 
 Every representation carries a `RepresentationInfo` with its family, reference,

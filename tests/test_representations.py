@@ -167,7 +167,14 @@ def test_aliases_share_the_target_metadata() -> None:
 
 def test_list_encoders_filters() -> None:
     assert list_encoders(family="gramian") == ["gadf", "gaf", "gdf"]
-    assert set(list_encoders(output_kind="time_frequency")) == {"cwt", "spec", "sst"}
+    # The time-frequency family grows; assert the filter is sound rather than
+    # pinning a list that every new spectral encoder would invalidate.
+    time_frequency = list_encoders(output_kind="time_frequency")
+    assert {"cwt", "spec", "sst"} <= set(time_frequency)
+    assert all(
+        ENCODER_METADATA[name].output_kind == "time_frequency"
+        for name in time_frequency
+    )
     assert "eph" not in list_encoders(canonical_method=True)
     strong = list_encoders(min_validation_level=ValidationLevel.REFERENCE)
     assert {"gaf", "mtf", "ph", "mp"} <= set(strong)
@@ -238,11 +245,9 @@ def test_unknown_names_raise() -> None:
 
 
 def test_list_representations_filters() -> None:
-    assert list_representations(family="time_frequency", trainable=False) == [
-        "cwt",
-        "spec",
-        "sst",
-    ]
+    time_frequency = list_representations(family="time_frequency", trainable=False)
+    assert {"cwt", "spec", "sst"} <= set(time_frequency)
+    assert time_frequency == sorted(time_frequency)
     assert list_representations(trainable=True) == []
     assert list_representations(pretrained=True) == []
     assert "gaf" in list_representations(deterministic=True)
@@ -251,6 +256,7 @@ def test_list_representations_filters() -> None:
         "gaf",
         "mp",
         "mtf",
+        "mtspec",
         "ph",
     ]
 

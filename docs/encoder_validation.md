@@ -40,6 +40,7 @@ no encoder has reached because no archive-scale run is committed yet
 | `msc` | filterbank | project-defined | LEVEL 1 — invariant | `O(K * N)` | test_multi_scale_conv_stack |
 | `msrp` | recurrence | project-defined | LEVEL 1 — invariant | `O(S * N^2)` | test_multi_scale_rp_stack |
 | `mtf` | markov | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | test_mtf_matches_pyts, test_mtf_matches_definition |
+| `mtspec` | time_frequency | canonical | LEVEL 3 — reference | `O(K * F * n_fft log n_fft) for K tapers and F frames` | test_single_taper_matches_a_direct_periodogram, test_variance_falls_roughly_as_one_over_k, test_tapers_are_scipy_dpss |
 | `otf` | symbolic | project-defined | LEVEL 2 — synthetic | `O(N * m log m) time, O(W^2) memory; state space is m!` | test_logistic_map_has_forbidden_patterns_and_noise_does_not, test_lehmer_codes_are_a_bijection_onto_the_state_space, test_transition_matrix_counts_match_a_direct_tally, test_invariant_under_monotonic_transformation |
 | `ph` | topological | canonical | LEVEL 3 — reference | `O(N log N) for the diagram, O(P * bins^2) for the image` | test_persistence_image_matches_persim, test_persistence_diagram_matches_ripser, test_persistence_diagram_matches_brute_force |
 | `randproj` | projection | project-defined | LEVEL 1 — invariant | `O(size^2 * N)` | test_randproj_deterministic |
@@ -132,6 +133,12 @@ no encoder has reached because no archive-scale run is committed yet
 
 - **Reference:** Wang & Oates (2015), IJCAI
 - **Provenance:** canonical
+
+### `mtspec`
+
+- **Reference:** Thomson (1982), Spectrum estimation and harmonic analysis, Proc. IEEE 70(9):1055-1096
+- **Provenance:** canonical
+- **Caveats:** Requires SciPy for the DPSS tapers, which are the method itself; no approximation is substituted. Trades frequency resolution for variance: tones closer than 2NW/window_size are not separated.
 
 ### `otf`
 

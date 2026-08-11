@@ -76,6 +76,7 @@ DOCUMENTED: dict[str, Any] = {
     "summary_markdown": evaluation.summary_markdown,
     "nemenyi_critical_difference": stats.nemenyi_critical_difference,
     "cross_recurrence_plot": multivariate.cross_recurrence_plot,
+    "joint_recurrence_plot": multivariate.joint_recurrence_plot,
     "delay_embed": multivariate.delay_embed,
     "list_representations": representations.list_representations,
     "get_representation": representations.get_representation,

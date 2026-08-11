@@ -201,6 +201,7 @@ _OTF = "tests/test_ordinal_transition.py"
 _DED = "tests/test_delay_embedding_density.py"
 _MTS = "tests/test_multitaper.py"
 _CRP = "tests/test_cross_recurrence.py"
+_JRP = "tests/test_joint_recurrence.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -682,6 +683,32 @@ MULTIVARIATE_METADATA: dict[str, RepresentationInfo] = {
             "output may be rectangular. The automatic threshold is the "
             "recurrence-rate quantile of the observed distances, a stated rule "
             "rather than a constant."
+        ),
+    ),
+    "joint_recurrence_plot": _info(
+        name="joint_recurrence_plot",
+        family="recurrence",
+        input_kind="multivariate",
+        output_kind="square_image",
+        canonical_method=True,
+        reference=(
+            "Romano, Thiel, Kurths & von Bloh (2004), Multivariate recurrence "
+            "plots, Physics Letters A 330(3-4):214-223"
+        ),
+        complexity="O(C * W^2 * m) time and O(W^2) memory",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_JRP}::test_and_is_the_product_of_the_per_channel_plots",
+            f"{_JRP}::test_one_channel_reduces_to_a_plain_recurrence_plot",
+            f"{_JRP}::test_invariant_to_rescaling_any_single_channel",
+            f"{_JRP}::test_coupled_channels_recur_together_more_than_uncoupled_ones",
+        ),
+        notes=(
+            "Only combination='and' is the canonical definition; 'product' and "
+            "'mean' are TSCV-Vision extensions that combine continuous "
+            "similarities rather than thresholded indicators. Each channel is "
+            "thresholded separately, so the result is unaffected by rescaling "
+            "any single channel."
         ),
     ),
 }

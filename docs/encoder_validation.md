@@ -28,6 +28,7 @@ no encoder has reached because no archive-scale run is committed yet
 | --- | --- | --- | --- | --- | --- |
 | `attn` | attention | project-defined | LEVEL 2 — synthetic | `O(W^2 * window) for W = N - window + 1` | test_window_attention_matches_softmax_definition |
 | `cwt` | time_frequency | project-defined | LEVEL 0 — smoke | `O(S * N log N)` | — |
+| `ded` | nonlinear_dynamics | project-defined | LEVEL 2 — synthetic | `O(N) to embed and bin, O(bins^2) memory` | test_logistic_map_traces_its_analytic_parabola, test_unnormalised_mass_is_the_number_of_embedded_points, test_periodic_signal_is_far_more_concentrated_than_noise, test_invariant_to_affine_rescaling |
 | `dtw` | elastic | canonical | LEVEL 2 — synthetic | `O(N^2)` | test_dtw_matrix_matches_definition |
 | `ensemble` | meta | project-defined | LEVEL 1 — invariant | `sum of the constituent encoders` | test_ensemble_stack, test_ensemble_mean |
 | `eph` | heuristic | project-defined | LEVEL 1 — invariant | `O(N + P * bins)` | test_extrema_persistence_histogram_keeps_old_behaviour |
@@ -62,6 +63,12 @@ no encoder has reached because no archive-scale run is committed yet
 - **Reference:** Torrence & Compo (1998), A Practical Guide to Wavelet Analysis, BAMS 79:61-78
 - **Provenance:** project-defined
 - **Caveats:** Only shape-tested. The Morlet path is a bespoke FFT implementation whose normalisation has not been compared against Torrence & Compo or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising this to REFERENCE is a v0.3.0 item.
+
+### `ded`
+
+- **Reference:** Takens (1981), Detecting strange attractors in turbulence, LNM 898:366-381 (the delay embedding, not the image)
+- **Provenance:** project-defined
+- **Caveats:** TSCV-Vision representation. It is not a recurrence plot: a recurrence plot is indexed by pairs of times, this image by state-space coordinates. Takens' embedding is published; rendering its occupancy as an image is ours. Chronological order is discarded entirely, so direction of travel and time reversal are invisible.
 
 ### `dtw`
 

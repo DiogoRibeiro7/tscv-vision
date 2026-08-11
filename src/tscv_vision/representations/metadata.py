@@ -190,6 +190,7 @@ _REG = "tests/test_regression_outputs.py"
 _SST = "tests/test_synchrosqueezed.py"
 _HVG = "tests/test_horizontal_visibility.py"
 _OTF = "tests/test_ordinal_transition.py"
+_DED = "tests/test_delay_embedding_density.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -398,6 +399,33 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
             "Project-defined pairwise-difference matrix on a min-max scaled "
             "series. Despite the name it is not the Gramian Angular Difference "
             "Field, which is `gadf`."
+        ),
+    ),
+    "ded": _info(
+        name="ded",
+        family="nonlinear_dynamics",
+        input_kind="univariate",
+        output_kind="square_image",
+        canonical_method=False,
+        reference=(
+            "Takens (1981), Detecting strange attractors in turbulence, "
+            "LNM 898:366-381 (the delay embedding, not the image)"
+        ),
+        complexity="O(N) to embed and bin, O(bins^2) memory",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_DED}::test_logistic_map_traces_its_analytic_parabola",
+            f"{_DED}::test_unnormalised_mass_is_the_number_of_embedded_points",
+            f"{_DED}::test_periodic_signal_is_far_more_concentrated_than_noise",
+            f"{_DED}::test_invariant_to_affine_rescaling",
+        ),
+        notes=(
+            "TSCV-Vision representation. It is not a recurrence plot: a "
+            "recurrence plot is indexed by pairs of times, this image by "
+            "state-space coordinates. Takens' embedding is published; "
+            "rendering its occupancy as an image is ours. Chronological order "
+            "is discarded entirely, so direction of travel and time reversal "
+            "are invisible."
         ),
     ),
     "msrp": _info(

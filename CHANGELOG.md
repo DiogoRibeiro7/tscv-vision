@@ -14,6 +14,15 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`encoders.delay_embedding_density`** (registry key `ded`) — a
+  TSCV-Vision representation: Takens' delay embedding, with a two-dimensional
+  projection of the reconstructed state space rendered as an occupancy image,
+  optionally Gaussian-smoothed. Explicitly not a recurrence plot, which is
+  indexed by pairs of times rather than by state-space coordinates. Validated
+  against known geometry: at delay 1 every occupied cell of the logistic map's
+  embedding lies within three bin widths of its analytic parabola
+  `y = 4x(1-x)`, and it occupies a quarter as much of the plane as noise.
+  Chronological order is discarded, which the tests assert rather than assume.
 - **`encoders.ordinal_transition_field`** (registry key `otf`) — a
   TSCV-Vision representation, labelled as such: it composes Bandt-Pompe
   ordinal patterns with an ordinal transition network, laid out as a field in

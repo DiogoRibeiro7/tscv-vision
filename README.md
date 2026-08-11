@@ -162,6 +162,7 @@ Every encoder accepts a `nan_policy` and is reachable by registry name through
 | Matrix profile | `encoders.matrix_profile(x, m)` or `mp` | `(N - m + 1,)` |
 | Shapelet transform | `encoders.shapelet_transform(x, k)` or `shapelet` | `(k, N - L + 1)` |
 | Window attention | `encoders.window_attention(x, window)` or `attn` | `(W, W)` |
+| Delay-embedding density | `encoders.delay_embedding_density(x)` or `ded` | `(bins, bins)` |
 | Multi-scale RP / conv | `msrp`, `msc` | stacked |
 | Random projection | `encoders.random_projection_image(x)` or `randproj` | `(size, size)` |
 | Ensemble | `encoders.ensemble(x, names)` or `ensemble` | stacked or averaged |

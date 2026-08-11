@@ -40,7 +40,12 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           files: coverage.xml
-          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Coverage reporting is not a quality gate, and tokenless uploads are
+          # rate-limited (HTTP 429), so a Codecov outage must not fail a build
+          # whose tests passed. Set the CODECOV_TOKEN secret for reliable
+          # uploads.
+          fail_ci_if_error: false
 
   optional:
     # Runs the `optional` marker excluded from the default addopts. Without this

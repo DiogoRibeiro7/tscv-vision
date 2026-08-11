@@ -85,7 +85,7 @@ def _build(n: int, J: int, Q: int | tuple[int, ...]) -> Any:
     return scattering1d(J=J, shape=(n,), Q=Q)
 
 
-def _ordering(meta: dict[str, Any]) -> NDArray[np.intp]:
+def _ordering(meta: dict[str, Any]) -> NDArray[np.integer[Any]]:
     """Deterministic row order: by scattering order, then descending centre frequency.
 
     Kymatio's native order is an implementation detail of its filter-bank
@@ -100,7 +100,11 @@ def _ordering(meta: dict[str, Any]) -> NDArray[np.intp]:
     # their order group rather than unpredictably.
     first = np.nan_to_num(xi[:, 0], nan=-np.inf)
     second = np.nan_to_num(xi[:, 1], nan=-np.inf)
-    return cast(NDArray[np.intp], np.lexsort((-second, -first, order)))
+    # No cast: numpy already types lexsort as an integer index array, and
+    # which integer width it picks varies by numpy version, so a cast is
+    # redundant on some and wrong on others.
+    index: NDArray[np.integer[Any]] = np.lexsort((-second, -first, order))
+    return index
 
 
 def scattering_meta(

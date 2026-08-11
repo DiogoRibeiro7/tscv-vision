@@ -54,6 +54,7 @@ no encoder has reached because no archive-scale run is committed yet
 | `spec` | time_frequency | canonical | LEVEL 2 — synthetic | `O((N/hop) * win log win)` | — | test_spectrogram_matches_framed_rfft, test_spectrogram_locates_a_pure_tone |
 | `sst` | time_frequency | canonical | LEVEL 2 — synthetic | `O(S * N log N) time, O(S * N) memory` | — | test_constant_sinusoid_ridge_is_the_true_frequency, test_linear_chirp_ridge_follows_the_analytic_law, test_two_components_are_resolved |
 | `vg` | graph | canonical | LEVEL 2 — synthetic | `O(N^2)` | — | test_visibility_graph_matches_definition, test_visibility_graph_symmetry |
+| `wavelet_coherence` | time_frequency | canonical | LEVEL 2 — synthetic | `O(S * N log N) plus O(S * N * w) for the scale-dependent smoothing` | — | test_unsmoothed_coherence_is_identically_one, test_coupling_localised_in_time_shows_up_in_time, test_phase_recovers_a_known_lead, test_coherence_is_bounded |
 
 ## References and caveats
 
@@ -220,3 +221,9 @@ no encoder has reached because no archive-scale run is committed yet
 
 - **Reference:** Lacasa et al. (2008), From time series to complex networks: The visibility graph, PNAS 105:4972-4975
 - **Provenance:** canonical
+
+### `wavelet_coherence`
+
+- **Reference:** Torrence & Compo (1998), A practical guide to wavelet analysis, BAMS 79(1):61-78; Grinsted, Moore & Jevrejeva (2004), NPG 11(5-6):561-566
+- **Provenance:** canonical
+- **Caveats:** Requires both series to have the same length. Without the time and scale smoothing the coherence is identically one for any pair, so smoothing=False returns a degenerate all-ones image and is documented and tested as such. Coherence is normalised: it measures consistency of the relationship, not the strength of either signal.

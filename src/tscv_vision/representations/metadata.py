@@ -202,6 +202,7 @@ _DED = "tests/test_delay_embedding_density.py"
 _MTS = "tests/test_multitaper.py"
 _CRP = "tests/test_cross_recurrence.py"
 _JRP = "tests/test_joint_recurrence.py"
+_WCO = "tests/test_wavelet_coherence.py"
 _SCAT = "tests/test_scattering.py"
 _CHIRP = "tests/test_chirplet.py"
 
@@ -737,6 +738,34 @@ MULTIVARIATE_METADATA: dict[str, RepresentationInfo] = {
             "output may be rectangular. The automatic threshold is the "
             "recurrence-rate quantile of the observed distances, a stated rule "
             "rather than a constant."
+        ),
+    ),
+    "wavelet_coherence": _info(
+        name="wavelet_coherence",
+        family="time_frequency",
+        input_kind="bivariate",
+        output_kind="time_frequency",
+        canonical_method=True,
+        reference=(
+            "Torrence & Compo (1998), A practical guide to wavelet analysis, "
+            "BAMS 79(1):61-78; Grinsted, Moore & Jevrejeva (2004), NPG "
+            "11(5-6):561-566"
+        ),
+        complexity="O(S * N log N) plus O(S * N * w) for the scale-dependent smoothing",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_WCO}::test_unsmoothed_coherence_is_identically_one",
+            f"{_WCO}::test_coupling_localised_in_time_shows_up_in_time",
+            f"{_WCO}::test_phase_recovers_a_known_lead",
+            f"{_WCO}::test_coherence_is_bounded",
+        ),
+        notes=(
+            "Requires both series to have the same length. Without the time "
+            "and scale smoothing the coherence is identically one for any "
+            "pair, so smoothing=False returns a degenerate all-ones image and "
+            "is documented and tested as such. Coherence is normalised: it "
+            "measures consistency of the relationship, not the strength of "
+            "either signal."
         ),
     ),
     "joint_recurrence_plot": _info(

@@ -178,6 +178,7 @@ Encoders taking more than one series live in `tscv_vision.multivariate`:
 | --- | --- | --- |
 | Cross recurrence plot | `multivariate.cross_recurrence_plot(x, y)` | `(N_x, N_y)` |
 | Joint recurrence plot | `multivariate.joint_recurrence_plot(X)` | `(W, W)` |
+| Wavelet coherence | `multivariate.wavelet_coherence(x, y)` | `(scales, N)` |
 
 ### Feature Extractors
 

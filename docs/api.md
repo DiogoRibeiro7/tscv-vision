@@ -209,6 +209,24 @@ different units — the result is unchanged by rescaling any single channel,
 which a shared `epsilon` would not be. `product` and `mean` are TSCV-Vision
 extensions combining continuous similarities rather than indicators.
 
+### `wavelet_coherence(x, y, *, fs=1.0, scales=None, voices=12, wavelet='morlet', smoothing=True, return_phase=False, nan_policy='raise') -> Array | WaveletCoherenceResult`
+Squared wavelet coherence (Torrence & Compo 1998; Grinsted et al. 2004):
+localised, frequency-resolved coupling between two series of equal length,
+bounded in `[0, 1]`.
+
+**`smoothing=False` returns an all-ones image.** Without the time and scale
+smoothing the ratio collapses to 1 at every point for *any* pair of signals.
+The option exists to make that degeneracy inspectable and is tested; it is not
+a faster approximation.
+
+`return_phase=True` returns a `WaveletCoherenceResult` with `coherence`,
+`phase`, `scales` and `frequencies`, so the return type follows the argument
+rather than the data.
+
+Coherence is normalised: it measures how *consistently* two series are related,
+not how strong either is, and is numerically ill-conditioned in bands where
+neither carries power.
+
 ### `delay_embed(x, dimension=1, delay=1) -> Array`
 Delay-coordinate embedding, `(N - (m-1)tau, m)`. Shared by the recurrence
 encoders in this module.

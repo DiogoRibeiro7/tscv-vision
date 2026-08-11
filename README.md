@@ -49,6 +49,7 @@ Install optional extras only when needed:
 | `domains` | `pip install "tscv-vision[domains]"` | Domain adapters backed by scikit-learn |
 | `speed` | `pip install "tscv-vision[speed]"` | Numba JIT encoder paths |
 | `spectral` | `pip install "tscv-vision[spectral]"` | DPSS tapers for the multitaper spectrogram |
+| `scattering` | `pip install "tscv-vision[scattering]"` | Kymatio wavelet scattering |
 | `gpu` | `pip install "tscv-vision[gpu]"` | CuPy-accelerated encoder paths |
 | `io` | `pip install "tscv-vision[io]"` | Arrow / Parquet / HDF5 readers and writers |
 | `streaming` | `pip install "tscv-vision[streaming]"` | Redis, Kafka and RabbitMQ stream sources |
@@ -167,6 +168,7 @@ Every encoder accepts a `nan_policy` and is reachable by registry name through
 | Delay-embedding density | `encoders.delay_embedding_density(x)` or `ded` | `(bins, bins)` |
 | Multi-scale RP / conv | `msrp`, `msc` | stacked |
 | Random projection | `encoders.random_projection_image(x)` or `randproj` | `(size, size)` |
+| Scattering | `scattering.scattering_transform(x)` or `scat` | `(paths, T)` |
 | Ensemble | `encoders.ensemble(x, names)` or `ensemble` | stacked or averaged |
 
 Encoders taking more than one series live in `tscv_vision.multivariate`:
@@ -243,7 +245,7 @@ rep.info.validation_level.label        # 'LEVEL 3 — reference'
 
 # Build an experiment from methods that are actually validated:
 list_representations(canonical_method=True, min_validation_level=3)
-# ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
+# ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph', 'scat']
 ```
 
 Every representation carries a `RepresentationInfo` with its family, reference,

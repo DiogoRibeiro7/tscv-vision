@@ -202,6 +202,7 @@ _DED = "tests/test_delay_embedding_density.py"
 _MTS = "tests/test_multitaper.py"
 _CRP = "tests/test_cross_recurrence.py"
 _JRP = "tests/test_joint_recurrence.py"
+_SCAT = "tests/test_scattering.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -318,6 +319,33 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
             "Requires SciPy for the DPSS tapers, which are the method itself; "
             "no approximation is substituted. Trades frequency resolution for "
             "variance: tones closer than 2NW/window_size are not separated."
+        ),
+    ),
+    "scat": _info(
+        name="scat",
+        family="scattering",
+        input_kind="univariate",
+        output_kind="rectangular_image",
+        canonical_method=True,
+        reference=(
+            "Mallat (2012), Group invariant scattering, CPAM 65(10):1331-1398; "
+            "Anden & Mallat (2014), Deep scattering spectrum, IEEE TSP "
+            "62(16):4114-4128"
+        ),
+        complexity="O(P * N log N) for P scattering paths",
+        optional_dependency="kymatio (extra: scattering)",
+        validation_level=ValidationLevel.REFERENCE,
+        validated_by=(
+            f"{_SCAT}::test_tensor_is_the_backend_output_verbatim",
+            f"{_SCAT}::test_image_is_a_permutation_of_the_backend_coefficients",
+            f"{_SCAT}::test_second_order_responds_to_amplitude_modulation",
+        ),
+        notes=(
+            "Time scattering via Kymatio, not joint time-frequency scattering: "
+            "no released Kymatio exposes TimeFrequencyScattering, and "
+            "approximating it by hand would carry the name without the method. "
+            "This layer adds validation, deterministic coefficient ordering and "
+            "a documented image layout; the transform itself is the backend's."
         ),
     ),
     "sst": _info(
@@ -775,7 +803,7 @@ def list_encoders(
     >>> list_encoders(family="gramian")
     ['gadf', 'gaf', 'gdf']
     >>> list_encoders(canonical_method=True, min_validation_level=ValidationLevel.REFERENCE)
-    ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
+    ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph', 'scat']
     """
 
     names = []

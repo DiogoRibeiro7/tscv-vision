@@ -142,6 +142,14 @@ Read `docs/encoder_validation.md` for the current per-encoder status.
       parts of `multimodal.py`, the neural adapters that have no upstream
       package installed in CI): validate, document as experimental, or remove
 
+### Deferred on a dependency
+
+- [ ] Joint time-frequency scattering (Andén, Lostanlen & Mallat, 2019).
+      Kymatio exposes `TimeFrequencyScattering` only on its development
+      branch; no released version has it. Add it as a separate encoder under
+      its own name once the backend ships it, rather than approximating it —
+      `tscv_vision.scattering` provides time scattering in the meantime.
+
 ### API hygiene
 
 - [ ] Remove the 0.2.0 deprecation aliases (`tpa`, `TSHAPExplainer`,

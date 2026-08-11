@@ -38,6 +38,7 @@ CORE_MODULES = [
     "tscv_vision.pipeline",
     "tscv_vision.representations",
     "tscv_vision.research",
+    "tscv_vision.scattering",
     "tscv_vision.sliding",
     "tscv_vision.stats",
     "tscv_vision.streaming",
@@ -69,6 +70,7 @@ OPTIONAL_PACKAGES = (
     "feast",
     "yaml",
     "tensorflow",
+    "kymatio",
 )
 
 
@@ -127,6 +129,19 @@ def test_optional_features_raise_directed_import_errors() -> None:
         parallel = importlib.import_module("tscv_vision.parallel")
         with pytest.raises(ImportError, match="dask"):
             parallel.map_dask(lambda x: x, [1, 2])
+
+
+def test_scattering_can_be_imported_before_encoders() -> None:
+    """Regression: the two modules were briefly circular.
+
+    `scattering` imports `encoders` for its validators, and `encoders`
+    registers the scattering encoder. Registering eagerly made importing
+    `scattering` first fail.
+    """
+
+    with _hidden(OPTIONAL_PACKAGES):
+        importlib.import_module("tscv_vision.scattering")
+        importlib.import_module("tscv_vision.encoders")
 
 
 def test_top_level_package_stays_lazy() -> None:

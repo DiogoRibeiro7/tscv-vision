@@ -77,6 +77,7 @@ setup(
         "distributed": ["dask>=2024.1"],
         "onnx": ["onnx"],
         "spectral": ["scipy>=1.10"],
+        "scattering": ["kymatio>=0.3", "scipy>=1.10,<1.17"],
     },
     entry_points={
         "console_scripts": [

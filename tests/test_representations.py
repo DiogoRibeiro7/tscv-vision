@@ -186,8 +186,12 @@ def test_list_encoders_filters() -> None:
 
 
 def test_validation_matrix_rows_cover_every_encoder() -> None:
+    from tscv_vision.representations import MULTIVARIATE_METADATA
+
     rows = validation_matrix_rows()
-    assert {row["encoder"] for row in rows} == set(list_encoders())
+    assert {row["encoder"] for row in rows} == set(list_encoders()) | set(
+        MULTIVARIATE_METADATA
+    )
     for row in rows:
         assert row["provenance"] in {"canonical", "project-defined"}
         assert row["validation"].startswith("LEVEL ")

@@ -45,6 +45,7 @@ __all__ = [
     "OutputKind",
     "RepresentationInfo",
     "ENCODER_METADATA",
+    "MULTIVARIATE_METADATA",
     "get_encoder_metadata",
     "list_encoders",
     "validation_matrix_rows",
@@ -199,6 +200,7 @@ _HVG = "tests/test_horizontal_visibility.py"
 _OTF = "tests/test_ordinal_transition.py"
 _DED = "tests/test_delay_embedding_density.py"
 _MTS = "tests/test_multitaper.py"
+_CRP = "tests/test_cross_recurrence.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -653,6 +655,38 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
     ),
 }
 
+#: Metadata for encoders in :mod:`tscv_vision.multivariate`, which take more
+#: than one series and so are not in the univariate encoder registry. They are
+#: kept separate from :data:`ENCODER_METADATA` for exactly that reason, but
+#: appear in the validation matrix alongside it.
+MULTIVARIATE_METADATA: dict[str, RepresentationInfo] = {
+    "cross_recurrence_plot": _info(
+        name="cross_recurrence_plot",
+        family="recurrence",
+        input_kind="bivariate",
+        output_kind="rectangular_image",
+        canonical_method=True,
+        reference=(
+            "Marwan & Kurths (2002), Nonlinear analysis of bivariate data with "
+            "cross recurrence plots, Physics Letters A 302(5-6):299-307"
+        ),
+        complexity="O(N_x * N_y * m) time and O(N_x * N_y) memory",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_CRP}::test_self_cross_recurrence_matches_encoders_recurrence_plot",
+            f"{_CRP}::test_phase_shift_moves_the_diagonal_by_the_lag",
+            f"{_CRP}::test_automatic_threshold_hits_the_target_rate",
+        ),
+        notes=(
+            "Takes two series, which need not be the same length, so the "
+            "output may be rectangular. The automatic threshold is the "
+            "recurrence-rate quantile of the observed distances, a stated rule "
+            "rather than a constant."
+        ),
+    ),
+}
+
+
 #: Registry aliases that resolve to the same implementation as another key.
 ENCODER_ALIASES: dict[str, str] = {
     "visibility_graph": "vg",
@@ -675,6 +709,8 @@ def get_encoder_metadata(name: str) -> RepresentationInfo:
         If ``name`` has no metadata entry.
     """
 
+    if name in MULTIVARIATE_METADATA:
+        return MULTIVARIATE_METADATA[name]
     try:
         return ENCODER_METADATA[name]
     except KeyError:
@@ -759,8 +795,10 @@ def validation_matrix_rows() -> list[dict[str, str]]:
     """Return one row per encoder for the validation matrix, sorted by name."""
 
     rows = []
-    for name in list_encoders():
-        info = ENCODER_METADATA[name]
+    combined = {name: ENCODER_METADATA[name] for name in list_encoders()}
+    combined.update(MULTIVARIATE_METADATA)
+    for name in sorted(combined):
+        info = combined[name]
         rows.append(
             {
                 "encoder": name,

@@ -27,6 +27,7 @@ no encoder has reached because no archive-scale run is committed yet
 | Encoder | Family | Provenance | Validation | Complexity | Optional dependency | Backing tests |
 | --- | --- | --- | --- | --- | --- | --- |
 | `attn` | attention | project-defined | LEVEL 2 — synthetic | `O(W^2 * window) for W = N - window + 1` | — | test_window_attention_matches_softmax_definition |
+| `cross_recurrence_plot` | recurrence | canonical | LEVEL 2 — synthetic | `O(N_x * N_y * m) time and O(N_x * N_y) memory` | — | test_self_cross_recurrence_matches_encoders_recurrence_plot, test_phase_shift_moves_the_diagonal_by_the_lag, test_automatic_threshold_hits_the_target_rate |
 | `cwt` | time_frequency | project-defined | LEVEL 0 — smoke | `O(S * N log N)` | pywavelets (extra: analytics) for non-Morlet wavelets | — |
 | `ded` | nonlinear_dynamics | project-defined | LEVEL 2 — synthetic | `O(N) to embed and bin, O(bins^2) memory` | — | test_logistic_map_traces_its_analytic_parabola, test_unnormalised_mass_is_the_number_of_embedded_points, test_periodic_signal_is_far_more_concentrated_than_noise, test_invariant_to_affine_rescaling |
 | `dtw` | elastic | canonical | LEVEL 2 — synthetic | `O(N^2)` | — | test_dtw_matrix_matches_definition |
@@ -58,6 +59,12 @@ no encoder has reached because no archive-scale run is committed yet
 - **Reference:** Vaswani et al. (2017), Attention Is All You Need, NeurIPS (scaled dot-product attention)
 - **Provenance:** project-defined
 - **Caveats:** Parameter-free self-attention between sliding windows. It is not Temporal Pattern Attention (Shih, Sun & Lee, 2019), which it was incorrectly named after before 0.2.0.
+
+### `cross_recurrence_plot`
+
+- **Reference:** Marwan & Kurths (2002), Nonlinear analysis of bivariate data with cross recurrence plots, Physics Letters A 302(5-6):299-307
+- **Provenance:** canonical
+- **Caveats:** Takes two series, which need not be the same length, so the output may be rectangular. The automatic threshold is the recurrence-rate quantile of the observed distances, a stated rule rather than a constant.
 
 ### `cwt`
 

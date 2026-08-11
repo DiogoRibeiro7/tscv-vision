@@ -27,6 +27,7 @@ from tscv_vision import (
     encoders,
     evaluation,
     features,
+    multivariate,
     representations,
     research,
     sliding,
@@ -74,6 +75,8 @@ DOCUMENTED: dict[str, Any] = {
     "compare_methods": evaluation.compare_methods,
     "summary_markdown": evaluation.summary_markdown,
     "nemenyi_critical_difference": stats.nemenyi_critical_difference,
+    "cross_recurrence_plot": multivariate.cross_recurrence_plot,
+    "delay_embed": multivariate.delay_embed,
     "list_representations": representations.list_representations,
     "get_representation": representations.get_representation,
     "get_representation_info": representations.get_representation_info,
@@ -157,6 +160,7 @@ def test_documented_names_all_exist() -> None:
         evaluation,
         pipeline,
         representations,
+        multivariate,
     )
     for name in _doc_entries():
         if name in DOCUMENTED:

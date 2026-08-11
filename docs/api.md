@@ -153,6 +153,27 @@ returning `nan`. Verified against `stumpy.stump`.
 ### `ensemble(x, names=None, *, nan_policy='raise', weights=None, aggregate='stack') -> Array`
 Stack or average several encoders that produce the same shape.
 
+## Multivariate encoders
+
+`tscv_vision.multivariate` holds encoders that take more than one series. They
+are not in the univariate `ENCODER_REGISTRY`, whose contract is
+`func(x) -> image`, but they do carry provenance metadata — see
+`MULTIVARIATE_METADATA` and the validation matrix.
+
+### `cross_recurrence_plot(x, y, *, dimension=1, delay=1, epsilon=None, recurrence_rate=0.1, metric='euclidean', binary=True, nan_policy='raise') -> Array`
+Cross recurrence plot between two trajectories (Marwan & Kurths, 2002): when
+does `x` visit a state of `y`. The two series **need not have equal length**,
+so the output may be rectangular `(N_x, N_y)`. With `epsilon=None` the
+threshold is the `recurrence_rate` quantile of the observed distances — a
+stated rule, so the plot has approximately that fill by construction and is
+invariant to a common rescaling. `binary=False` returns
+`1 - distance / max(distance)`, matching `recurrence_plot`'s convention, and
+the two agree exactly for `cross_recurrence_plot(x, x)`.
+
+### `delay_embed(x, dimension=1, delay=1) -> Array`
+Delay-coordinate embedding, `(N - (m-1)tau, m)`. Shared by the recurrence
+encoders in this module.
+
 ### Registry
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.

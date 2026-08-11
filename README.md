@@ -169,6 +169,12 @@ Every encoder accepts a `nan_policy` and is reachable by registry name through
 | Random projection | `encoders.random_projection_image(x)` or `randproj` | `(size, size)` |
 | Ensemble | `encoders.ensemble(x, names)` or `ensemble` | stacked or averaged |
 
+Encoders taking more than one series live in `tscv_vision.multivariate`:
+
+| Encoder | Function | Output |
+| --- | --- | --- |
+| Cross recurrence plot | `multivariate.cross_recurrence_plot(x, y)` | `(N_x, N_y)` |
+
 ### Feature Extractors
 
 | Function | Description |

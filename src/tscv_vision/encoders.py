@@ -1518,6 +1518,146 @@ def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     return cast(Array, adj)
 
 
+HVGWeight = Literal["binary", "amplitude", "distance"]
+
+
+def _hvg_edges(x: Array) -> list[tuple[int, int]]:
+    """Return the horizontal-visibility edges of ``x`` in ``O(N)`` time.
+
+    A monotonic stack holds the indices that are still visible from the right.
+    Each index is pushed once and popped once, so the total work is linear
+    rather than the quadratic scan the definition suggests.
+    """
+
+    edges: list[tuple[int, int]] = []
+    stack: list[int] = []
+    for i in range(x.size):
+        while stack and x[stack[-1]] < x[i]:
+            edges.append((stack.pop(), i))
+        if stack:
+            edges.append((stack[-1], i))
+            if x[stack[-1]] == x[i]:
+                # Equal heights block everything behind them, so the older
+                # index can never be seen again.
+                stack.pop()
+        stack.append(i)
+    return edges
+
+
+def horizontal_visibility_graph(
+    x: Array,
+    *,
+    weighted: bool = False,
+    weight: HVGWeight = "binary",
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    r"""Horizontal visibility graph adjacency matrix.
+
+    Two observations are *horizontally* visible when a horizontal line can be
+    drawn between the tops of their bars without crossing an intermediate bar:
+    for :math:`i < j`,
+
+    .. math::
+
+        x_k < \min(x_i, x_j) \quad \text{for all } i < k < j.
+
+    This is a different graph from :func:`visibility_graph`, which uses the
+    *natural* (line-of-sight) criterion. Every horizontal edge is also a
+    natural edge, but not the reverse, so the HVG is a subgraph of the NVG.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    weighted:
+        Must be ``True`` to use a non-binary ``weight``. Passing a weight
+        without setting this raises, so a mis-specified call cannot silently
+        produce a binary graph.
+    weight:
+        ``"binary"`` (the canonical definition) or one of two TSCV-Vision
+        extensions, which are **not** part of the published HVG:
+        ``"amplitude"`` weights an edge by ``|x_i - x_j|`` normalised by its
+        maximum, and ``"distance"`` by ``1 / (1 + |i - j|)``.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(N, N)`` symmetric adjacency matrix with a zero diagonal. Binary
+        ``{0, 1}`` unless a weighting is requested.
+
+    Raises
+    ------
+    ValueError
+        If ``weight`` is unknown, a non-binary weight is requested without
+        ``weighted=True``, or ``x`` is invalid.
+
+    Notes
+    -----
+    **Complexity** ``O(N)`` time to find the edges via a monotonic stack, then
+    ``O(N^2)`` memory to materialise the dense matrix — the matrix, not the
+    algorithm, is the quadratic part.
+
+    **Invariances** Invariant under any strictly increasing transformation of
+    the values, since the criterion involves only their order. This is the
+    sharpest practical difference from the natural visibility graph, whose
+    slope-based criterion is not order-invariant. Also invariant to time
+    reversal.
+
+    **Information lost** Everything except the ordinal structure: amplitudes,
+    sampling interval and absolute time all disappear. Two series with the same
+    ranking of values give the same binary graph.
+
+    **Use cases** Distinguishing stochastic from chaotic dynamics, where the
+    HVG degree distribution has known analytic forms — uncorrelated noise gives
+    :math:`P(k) = \frac{1}{3}\left(\frac{2}{3}\right)^{k-2}`.
+
+    References
+    ----------
+    Luque, Lacasa, Ballesteros & Luque (2009), "Horizontal visibility graphs:
+    exact results for random time series", Physical Review E 80:046103.
+
+    Examples
+    --------
+    >>> horizontal_visibility_graph(np.array([1.0, 3.0, 2.0, 4.0]))
+    array([[0., 1., 0., 0.],
+           [1., 0., 1., 1.],
+           [0., 1., 0., 1.],
+           [0., 1., 1., 0.]])
+    """
+
+    series = _validate_series(x, nan_policy=nan_policy)
+    if weight not in {"binary", "amplitude", "distance"}:
+        raise ValueError("weight must be 'binary', 'amplitude' or 'distance'")
+    if weight != "binary" and not weighted:
+        raise ValueError(
+            f"weight={weight!r} requires weighted=True; refusing to silently "
+            "return a binary graph"
+        )
+
+    n = series.size
+    adjacency = np.zeros((n, n), dtype=float)
+    edges = _hvg_edges(series)
+    if not edges:
+        return cast(Array, adjacency)
+
+    rows = np.fromiter((i for i, _ in edges), dtype=np.intp, count=len(edges))
+    cols = np.fromiter((j for _, j in edges), dtype=np.intp, count=len(edges))
+
+    if not weighted or weight == "binary":
+        values = np.ones(len(edges), dtype=float)
+    elif weight == "amplitude":
+        values = np.abs(series[rows] - series[cols])
+        values = values / (values.max() + 1e-12)
+    else:  # distance
+        values = 1.0 / (1.0 + np.abs(rows - cols).astype(float))
+
+    adjacency[rows, cols] = values
+    adjacency[cols, rows] = values
+    return cast(Array, adjacency)
+
+
 def shapelet_transform(
     x: Array,
     k: int = 3,
@@ -1745,6 +1885,7 @@ register_encoder("sax", sax)
 register_encoder("msc", multi_scale_conv)
 register_encoder("attn", window_attention)
 register_encoder("vg", visibility_graph)
+register_encoder("hvg", horizontal_visibility_graph)
 register_encoder("shapelet", shapelet_transform)
 register_encoder("mp", matrix_profile)
 register_encoder("randproj", random_projection_image)
@@ -1786,6 +1927,8 @@ __all__ = [
     "sax",
     "sax_symbols",
     "visibility_graph",
+    "horizontal_visibility_graph",
+    "HVGWeight",
     "shapelet_transform",
     "matrix_profile",
     "random_projection_image",

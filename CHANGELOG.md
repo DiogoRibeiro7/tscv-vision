@@ -14,6 +14,16 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`encoders.horizontal_visibility_graph`** (registry key `hvg`) — the
+  horizontal visibility criterion, distinct from the natural visibility graph
+  already provided by `visibility_graph`. Edges are found in `O(N)` with a
+  monotonic stack rather than the quadratic scan the definition suggests, and
+  the result is checked against that definition by brute force over hundreds of
+  random series and against hand-computed examples. Being ordinal, it is
+  invariant under any strictly increasing transformation of the values, which
+  the tests use to demonstrate that it is genuinely a different graph from the
+  NVG. Optional amplitude and distance weightings are labelled as TSCV-Vision
+  extensions and must be requested explicitly.
 - `benchmark.benchmark_time_frequency` — runtime, peak memory, sparsity and
   energy concentration for the spectrogram, CWT and synchrosqueezed CWT.
 

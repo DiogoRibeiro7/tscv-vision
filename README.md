@@ -157,6 +157,7 @@ Every encoder accepts a `nan_policy` and is reachable by registry name through
 | SAX image | `encoders.sax(x)` or `sax` | `(segments, segments)` |
 | DTW cost matrix | `encoders.dtw_matrix(x)` or `dtw` | `(N, N)` |
 | Visibility graph | `encoders.visibility_graph(x)` or `vg` | `(N, N)` |
+| Horizontal visibility graph | `encoders.horizontal_visibility_graph(x)` or `hvg` | `(N, N)` |
 | Matrix profile | `encoders.matrix_profile(x, m)` or `mp` | `(N - m + 1,)` |
 | Shapelet transform | `encoders.shapelet_transform(x, k)` or `shapelet` | `(k, N - L + 1)` |
 | Window attention | `encoders.window_attention(x, window)` or `attn` | `(W, W)` |

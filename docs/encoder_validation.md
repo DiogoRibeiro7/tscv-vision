@@ -34,6 +34,7 @@ no encoder has reached because no archive-scale run is committed yet
 | `gadf` | gramian | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | test_gaf_matches_pyts, test_gadf_matches_definition |
 | `gaf` | gramian | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | test_gaf_matches_pyts, test_gasf_matches_definition |
 | `gdf` | gramian | project-defined | LEVEL 1 — invariant | `O(N^2) time and memory` | test_gdf_range |
+| `hvg` | graph | canonical | LEVEL 2 — synthetic | `O(N) time for the edges, O(N^2) memory for the dense matrix` | test_matches_the_definition_by_brute_force, test_hand_computed_examples, test_invariant_under_monotonic_transformation |
 | `mp` | subsequence | canonical | LEVEL 3 — reference | `O(N^2 * m) time, O(N^2) memory` | test_matrix_profile_matches_stumpy, test_matrix_profile_matches_brute_force |
 | `msc` | filterbank | project-defined | LEVEL 1 — invariant | `O(K * N)` | test_multi_scale_conv_stack |
 | `msrp` | recurrence | project-defined | LEVEL 1 — invariant | `O(S * N^2)` | test_multi_scale_rp_stack |
@@ -94,6 +95,12 @@ no encoder has reached because no archive-scale run is committed yet
 - **Reference:** —
 - **Provenance:** project-defined
 - **Caveats:** Project-defined pairwise-difference matrix on a min-max scaled series. Despite the name it is not the Gramian Angular Difference Field, which is `gadf`.
+
+### `hvg`
+
+- **Reference:** Luque, Lacasa, Ballesteros & Luque (2009), Horizontal visibility graphs: exact results for random time series, Phys. Rev. E 80:046103
+- **Provenance:** canonical
+- **Caveats:** Distinct from `vg`: the horizontal criterion is order-based, so the HVG is a subgraph of the natural visibility graph and is invariant under any strictly increasing transformation of the values. The amplitude and distance weightings are TSCV-Vision extensions, not part of the published definition.
 
 ### `mp`
 

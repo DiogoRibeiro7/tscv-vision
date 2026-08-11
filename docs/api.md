@@ -103,6 +103,15 @@ Row-stochastic scaled dot-product self-attention between sliding windows,
 ### `visibility_graph(x, *, nan_policy='raise') -> Array`
 Natural visibility graph adjacency `(N, N)` (Lacasa et al., 2008).
 
+### `horizontal_visibility_graph(x, *, weighted=False, weight='binary', nan_policy='raise') -> Array`
+Horizontal visibility graph adjacency `(N, N)` (Luque et al., 2009): `i` and
+`j` are connected when every intermediate `x[k] < min(x[i], x[j])`. Distinct
+from `visibility_graph` — the criterion is ordinal, so the HVG is a subgraph of
+the natural visibility graph and is invariant under any strictly increasing
+transformation of the values. Edges are found in `O(N)` with a monotonic stack.
+The `amplitude` and `distance` weightings are TSCV-Vision extensions and
+require `weighted=True`, which is enforced rather than silently ignored.
+
 ### `shapelet_transform(x, k=3, length=None, seed=None, *, nan_policy='raise') -> Array`
 Distance maps to `k` randomly sampled subsequences, `(k, N - length + 1)`.
 
@@ -121,7 +130,7 @@ Stack or average several encoders that produce the same shape.
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.
 Registered keys: `gaf`, `gadf`, `rp`, `spec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `gdf`,
-`msrp`, `dtw`, `sax`, `msc`, `attn`, `vg`, `shapelet`, `mp`, `randproj`,
+`msrp`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `randproj`,
 `ensemble`, plus the long-form aliases `visibility_graph`, `matrix_profile`,
 `persistence_image`, `window_attention` and the legacy key `tpa`
 (→ `window_attention`).

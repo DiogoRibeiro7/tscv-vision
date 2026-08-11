@@ -188,6 +188,7 @@ _NEW = "tests/test_new_encoders.py"
 _PROP = "tests/test_encoder_properties.py"
 _REG = "tests/test_regression_outputs.py"
 _SST = "tests/test_synchrosqueezed.py"
+_HVG = "tests/test_horizontal_visibility.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -474,6 +475,31 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
         validated_by=(
             f"{_DEF}::test_visibility_graph_matches_definition",
             f"{_NEW}::test_visibility_graph_symmetry",
+        ),
+    ),
+    "hvg": _info(
+        name="hvg",
+        family="graph",
+        input_kind="univariate",
+        output_kind="square_image",
+        canonical_method=True,
+        reference=(
+            "Luque, Lacasa, Ballesteros & Luque (2009), Horizontal visibility "
+            "graphs: exact results for random time series, Phys. Rev. E 80:046103"
+        ),
+        complexity="O(N) time for the edges, O(N^2) memory for the dense matrix",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_HVG}::test_matches_the_definition_by_brute_force",
+            f"{_HVG}::test_hand_computed_examples",
+            f"{_HVG}::test_invariant_under_monotonic_transformation",
+        ),
+        notes=(
+            "Distinct from `vg`: the horizontal criterion is order-based, so "
+            "the HVG is a subgraph of the natural visibility graph and is "
+            "invariant under any strictly increasing transformation of the "
+            "values. The amplitude and distance weightings are TSCV-Vision "
+            "extensions, not part of the published definition."
         ),
     ),
     "shapelet": _info(

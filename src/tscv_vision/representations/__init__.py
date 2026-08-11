@@ -63,6 +63,7 @@ from .learned import LearnedRepresentation
 from .metadata import (
     ENCODER_ALIASES,
     ENCODER_METADATA,
+    MULTIVARIATE_METADATA,
     InputKind,
     OutputKind,
     RepresentationInfo,
@@ -102,6 +103,7 @@ __all__ = [
     "InputKind",
     "OutputKind",
     "ENCODER_METADATA",
+    "MULTIVARIATE_METADATA",
     "ENCODER_ALIASES",
     "get_encoder_metadata",
     "list_encoders",

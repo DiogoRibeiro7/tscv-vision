@@ -28,6 +28,7 @@ __all__ = [
     "ml_integration",
     "mlops",
     "multimodal",
+    "multivariate",
     "neural",
     "parallel",
     "pipeline",

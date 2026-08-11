@@ -14,6 +14,22 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`tscv_vision.multivariate`** — a new module for encoders that take more
+  than one series, since the univariate validator in `encoders` is the wrong
+  contract for them and their output may be rectangular. Provides the shared
+  recurrence machinery (`delay_embed`, pairwise distances, threshold
+  selection) used by every recurrence encoder in it.
+- **`multivariate.cross_recurrence_plot`** — cross recurrence between two
+  trajectories (Marwan & Kurths, 2002). The series need not have equal length.
+  The automatic threshold is the recurrence-rate quantile of the observed
+  distances, a stated rule rather than a constant, which makes the plot
+  invariant to a common rescaling. Validated by recovering a known phase shift
+  as the offset of the dominant diagonal, by hitting the target recurrence
+  rate to within 0.01, and by agreeing exactly with `encoders.recurrence_plot`
+  on `cross_recurrence_plot(x, x)`.
+- `RepresentationInfo` gained `optional_dependency`, and multivariate encoders
+  get their own `MULTIVARIATE_METADATA` so that living outside the univariate
+  registry does not mean living outside the provenance system.
 - **`encoders.multitaper_spectrogram`** (registry key `mtspec`) — Thomson's
   multitaper spectral estimator, averaging periodograms over orthogonal DPSS
   tapers. Validated against the estimator's quantitative promise: the relative

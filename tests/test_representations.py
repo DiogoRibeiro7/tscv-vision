@@ -167,7 +167,14 @@ def test_aliases_share_the_target_metadata() -> None:
 
 def test_list_encoders_filters() -> None:
     assert list_encoders(family="gramian") == ["gadf", "gaf", "gdf"]
-    assert set(list_encoders(output_kind="time_frequency")) == {"cwt", "spec", "sst"}
+    # The time-frequency family grows; assert the filter is sound rather than
+    # pinning a list that every new spectral encoder would invalidate.
+    time_frequency = list_encoders(output_kind="time_frequency")
+    assert {"cwt", "spec", "sst"} <= set(time_frequency)
+    assert all(
+        ENCODER_METADATA[name].output_kind == "time_frequency"
+        for name in time_frequency
+    )
     assert "eph" not in list_encoders(canonical_method=True)
     strong = list_encoders(min_validation_level=ValidationLevel.REFERENCE)
     assert {"gaf", "mtf", "ph", "mp"} <= set(strong)
@@ -205,10 +212,25 @@ def test_registry_covers_every_builtin_encoder() -> None:
     assert set(list_representations(include_aliases=True)) == set(encoders.BUILTIN_ENCODERS)
 
 
+def _transform_or_skip(name: str, series: np.ndarray) -> np.ndarray:
+    """Transform, skipping when the encoder needs an uninstalled extra.
+
+    A missing optional dependency is a fact about the environment, not a
+    defect; `info.optional_dependency` records which ones can be absent.
+    """
+
+    try:
+        return get_representation(name).transform(series)
+    except ImportError as exc:
+        required = get_representation_info(name).optional_dependency
+        assert required, f"{name} raised ImportError but declares no dependency"
+        pytest.skip(f"{name} needs {required}: {exc}")
+
+
 @pytest.mark.parametrize("name", list_representations())
 def test_every_representation_transforms(name: str, series: np.ndarray) -> None:
     rep = get_representation(name)
-    out = rep.transform(series)
+    out = _transform_or_skip(name, series)
     assert isinstance(out, np.ndarray)
     assert out.size > 0
     assert np.all(np.isfinite(out))
@@ -217,9 +239,23 @@ def test_every_representation_transforms(name: str, series: np.ndarray) -> None:
 
 @pytest.mark.parametrize("name", list_representations())
 def test_every_representation_is_deterministic(name: str, series: np.ndarray) -> None:
-    first = get_representation(name).transform(series)
+    first = _transform_or_skip(name, series)
     second = get_representation(name).transform(series)
     np.testing.assert_array_equal(first, second)
+
+
+def test_optional_dependencies_are_declared() -> None:
+    """Anything that can raise ImportError must say which package it needs."""
+
+    series = np.sin(np.linspace(0, 12 * np.pi, 128))
+    for name in list_representations():
+        info = get_representation_info(name)
+        try:
+            get_representation(name).transform(series)
+        except ImportError:
+            assert info.optional_dependency, (
+                f"{name} raised ImportError but declares no optional_dependency"
+            )
 
 
 def test_get_representation_forwards_kwargs() -> None:
@@ -238,11 +274,9 @@ def test_unknown_names_raise() -> None:
 
 
 def test_list_representations_filters() -> None:
-    assert list_representations(family="time_frequency", trainable=False) == [
-        "cwt",
-        "spec",
-        "sst",
-    ]
+    time_frequency = list_representations(family="time_frequency", trainable=False)
+    assert {"cwt", "spec", "sst"} <= set(time_frequency)
+    assert time_frequency == sorted(time_frequency)
     assert list_representations(trainable=True) == []
     assert list_representations(pretrained=True) == []
     assert "gaf" in list_representations(deterministic=True)
@@ -251,6 +285,7 @@ def test_list_representations_filters() -> None:
         "gaf",
         "mp",
         "mtf",
+        "mtspec",
         "ph",
     ]
 

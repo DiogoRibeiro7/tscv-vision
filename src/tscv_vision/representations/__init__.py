@@ -26,7 +26,7 @@ Filtering on that metadata is the point — it is how you assemble a defensible
 experiment rather than an arbitrary one:
 
     >>> list_representations(canonical_method=True, min_validation_level=3)
-    ['gadf', 'gaf', 'mp', 'mtf', 'ph']
+    ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
 
 scikit-learn is not required. Wrap a representation with
 :func:`~tscv_vision.representations.base.as_sklearn` when a transformer is
@@ -248,9 +248,9 @@ def list_representations(
     Examples
     --------
     >>> list_representations(family="time_frequency", trainable=False)
-    ['cwt', 'spec', 'sst']
+    ['cwt', 'mtspec', 'spec', 'sst']
     >>> list_representations(min_validation_level=ValidationLevel.REFERENCE)
-    ['gadf', 'gaf', 'mp', 'mtf', 'ph', 'sax']
+    ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph', 'sax']
     """
 
     names = []

@@ -123,6 +123,11 @@ class RepresentationInfo:
         See :class:`ValidationLevel`.
     validated_by:
         Test node ids or files backing ``validation_level``.
+    optional_dependency:
+        Package required to run this representation at all, with the extra
+        that provides it, or ``""`` when the core install suffices. Callers
+        that enumerate the registry need this to tell "not installed" apart
+        from "broken".
     notes:
         Anything a user must know that the fields above cannot express —
         in particular, how a project-defined variant differs from the
@@ -143,6 +148,7 @@ class RepresentationInfo:
     complexity: str = "unspecified"
     validation_level: ValidationLevel = ValidationLevel.SMOKE
     validated_by: tuple[str, ...] = ()
+    optional_dependency: str = ""
     notes: str = ""
 
     def __post_init__(self) -> None:
@@ -178,6 +184,7 @@ class RepresentationInfo:
             "complexity": self.complexity,
             "validation_level": int(self.validation_level),
             "validated_by": list(self.validated_by),
+            "optional_dependency": self.optional_dependency,
             "notes": self.notes,
         }
 
@@ -191,6 +198,7 @@ _SST = "tests/test_synchrosqueezed.py"
 _HVG = "tests/test_horizontal_visibility.py"
 _OTF = "tests/test_ordinal_transition.py"
 _DED = "tests/test_delay_embedding_density.py"
+_MTS = "tests/test_multitaper.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -275,6 +283,7 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
             "Analysis, BAMS 79:61-78"
         ),
         complexity="O(S * N log N)",
+        optional_dependency="pywavelets (extra: analytics) for non-Morlet wavelets",
         validation_level=ValidationLevel.SMOKE,
         validated_by=(),
         notes=(
@@ -282,6 +291,30 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
             "whose normalisation has not been compared against Torrence & Compo "
             "or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising "
             "this to REFERENCE is a v0.3.0 item."
+        ),
+    ),
+    "mtspec": _info(
+        name="mtspec",
+        family="time_frequency",
+        input_kind="univariate",
+        output_kind="time_frequency",
+        canonical_method=True,
+        reference=(
+            "Thomson (1982), Spectrum estimation and harmonic analysis, "
+            "Proc. IEEE 70(9):1055-1096"
+        ),
+        complexity="O(K * F * n_fft log n_fft) for K tapers and F frames",
+        optional_dependency="scipy (extra: spectral)",
+        validation_level=ValidationLevel.REFERENCE,
+        validated_by=(
+            f"{_MTS}::test_single_taper_matches_a_direct_periodogram",
+            f"{_MTS}::test_variance_falls_roughly_as_one_over_k",
+            f"{_MTS}::test_tapers_are_scipy_dpss",
+        ),
+        notes=(
+            "Requires SciPy for the DPSS tapers, which are the method itself; "
+            "no approximation is substituted. Trades frequency resolution for "
+            "variance: tones closer than 2NW/window_size are not separated."
         ),
     ),
     "sst": _info(
@@ -679,7 +712,7 @@ def list_encoders(
     >>> list_encoders(family="gramian")
     ['gadf', 'gaf', 'gdf']
     >>> list_encoders(canonical_method=True, min_validation_level=ValidationLevel.REFERENCE)
-    ['gadf', 'gaf', 'mp', 'mtf', 'ph']
+    ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
     """
 
     names = []
@@ -737,6 +770,7 @@ def validation_matrix_rows() -> list[dict[str, str]]:
                 "complexity": info.complexity,
                 "validation": info.validation_level.label,
                 "tests": ", ".join(t.split("::")[-1] for t in info.validated_by) or "—",
+                "optional_dependency": info.optional_dependency or "—",
                 "notes": info.notes,
             }
         )
@@ -775,13 +809,15 @@ def validation_matrix_markdown() -> str:
         "",
         "## Matrix",
         "",
-        "| Encoder | Family | Provenance | Validation | Complexity | Backing tests |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Encoder | Family | Provenance | Validation | Complexity "
+        "| Optional dependency | Backing tests |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in validation_matrix_rows():
         lines.append(
             f"| `{row['encoder']}` | {row['family']} | {row['provenance']} "
-            f"| {row['validation']} | `{row['complexity']}` | {row['tests']} |"
+            f"| {row['validation']} | `{row['complexity']}` "
+            f"| {row['optional_dependency']} | {row['tests']} |"
         )
 
     lines += ["", "## References and caveats", ""]

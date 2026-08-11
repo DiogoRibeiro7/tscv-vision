@@ -24,31 +24,32 @@ no encoder has reached because no archive-scale run is committed yet
 
 ## Matrix
 
-| Encoder | Family | Provenance | Validation | Complexity | Backing tests |
-| --- | --- | --- | --- | --- | --- |
-| `attn` | attention | project-defined | LEVEL 2 — synthetic | `O(W^2 * window) for W = N - window + 1` | test_window_attention_matches_softmax_definition |
-| `cwt` | time_frequency | project-defined | LEVEL 0 — smoke | `O(S * N log N)` | — |
-| `ded` | nonlinear_dynamics | project-defined | LEVEL 2 — synthetic | `O(N) to embed and bin, O(bins^2) memory` | test_logistic_map_traces_its_analytic_parabola, test_unnormalised_mass_is_the_number_of_embedded_points, test_periodic_signal_is_far_more_concentrated_than_noise, test_invariant_to_affine_rescaling |
-| `dtw` | elastic | canonical | LEVEL 2 — synthetic | `O(N^2)` | test_dtw_matrix_matches_definition |
-| `ensemble` | meta | project-defined | LEVEL 1 — invariant | `sum of the constituent encoders` | test_ensemble_stack, test_ensemble_mean |
-| `eph` | heuristic | project-defined | LEVEL 1 — invariant | `O(N + P * bins)` | test_extrema_persistence_histogram_keeps_old_behaviour |
-| `gadf` | gramian | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | test_gaf_matches_pyts, test_gadf_matches_definition |
-| `gaf` | gramian | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | test_gaf_matches_pyts, test_gasf_matches_definition |
-| `gdf` | gramian | project-defined | LEVEL 1 — invariant | `O(N^2) time and memory` | test_gdf_range |
-| `hvg` | graph | canonical | LEVEL 2 — synthetic | `O(N) time for the edges, O(N^2) memory for the dense matrix` | test_matches_the_definition_by_brute_force, test_hand_computed_examples, test_invariant_under_monotonic_transformation |
-| `mp` | subsequence | canonical | LEVEL 3 — reference | `O(N^2 * m) time, O(N^2) memory` | test_matrix_profile_matches_stumpy, test_matrix_profile_matches_brute_force |
-| `msc` | filterbank | project-defined | LEVEL 1 — invariant | `O(K * N)` | test_multi_scale_conv_stack |
-| `msrp` | recurrence | project-defined | LEVEL 1 — invariant | `O(S * N^2)` | test_multi_scale_rp_stack |
-| `mtf` | markov | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | test_mtf_matches_pyts, test_mtf_matches_definition |
-| `otf` | symbolic | project-defined | LEVEL 2 — synthetic | `O(N * m log m) time, O(W^2) memory; state space is m!` | test_logistic_map_has_forbidden_patterns_and_noise_does_not, test_lehmer_codes_are_a_bijection_onto_the_state_space, test_transition_matrix_counts_match_a_direct_tally, test_invariant_under_monotonic_transformation |
-| `ph` | topological | canonical | LEVEL 3 — reference | `O(N log N) for the diagram, O(P * bins^2) for the image` | test_persistence_image_matches_persim, test_persistence_diagram_matches_ripser, test_persistence_diagram_matches_brute_force |
-| `randproj` | projection | project-defined | LEVEL 1 — invariant | `O(size^2 * N)` | test_randproj_deterministic |
-| `rp` | recurrence | canonical | LEVEL 2 — synthetic | `O(N^2) time and memory` | test_recurrence_plot_matches_definition, test_recurrence_plot_symmetric_diag |
-| `sax` | symbolic | project-defined | LEVEL 3 — reference | `O(N + segments^2)` | test_sax_breakpoints_match_scipy_norm_ppf, test_sax_gaussian_breakpoints_match_published_table, test_sax_gaussian_is_invariant_to_affine_rescaling |
-| `shapelet` | subsequence | project-defined | LEVEL 1 — invariant | `O(k * N * length)` | test_shapelet_transform_basic |
-| `spec` | time_frequency | canonical | LEVEL 2 — synthetic | `O((N/hop) * win log win)` | test_spectrogram_matches_framed_rfft, test_spectrogram_locates_a_pure_tone |
-| `sst` | time_frequency | canonical | LEVEL 2 — synthetic | `O(S * N log N) time, O(S * N) memory` | test_constant_sinusoid_ridge_is_the_true_frequency, test_linear_chirp_ridge_follows_the_analytic_law, test_two_components_are_resolved |
-| `vg` | graph | canonical | LEVEL 2 — synthetic | `O(N^2)` | test_visibility_graph_matches_definition, test_visibility_graph_symmetry |
+| Encoder | Family | Provenance | Validation | Complexity | Optional dependency | Backing tests |
+| --- | --- | --- | --- | --- | --- | --- |
+| `attn` | attention | project-defined | LEVEL 2 — synthetic | `O(W^2 * window) for W = N - window + 1` | — | test_window_attention_matches_softmax_definition |
+| `cwt` | time_frequency | project-defined | LEVEL 0 — smoke | `O(S * N log N)` | pywavelets (extra: analytics) for non-Morlet wavelets | — |
+| `ded` | nonlinear_dynamics | project-defined | LEVEL 2 — synthetic | `O(N) to embed and bin, O(bins^2) memory` | — | test_logistic_map_traces_its_analytic_parabola, test_unnormalised_mass_is_the_number_of_embedded_points, test_periodic_signal_is_far_more_concentrated_than_noise, test_invariant_to_affine_rescaling |
+| `dtw` | elastic | canonical | LEVEL 2 — synthetic | `O(N^2)` | — | test_dtw_matrix_matches_definition |
+| `ensemble` | meta | project-defined | LEVEL 1 — invariant | `sum of the constituent encoders` | — | test_ensemble_stack, test_ensemble_mean |
+| `eph` | heuristic | project-defined | LEVEL 1 — invariant | `O(N + P * bins)` | — | test_extrema_persistence_histogram_keeps_old_behaviour |
+| `gadf` | gramian | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | — | test_gaf_matches_pyts, test_gadf_matches_definition |
+| `gaf` | gramian | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | — | test_gaf_matches_pyts, test_gasf_matches_definition |
+| `gdf` | gramian | project-defined | LEVEL 1 — invariant | `O(N^2) time and memory` | — | test_gdf_range |
+| `hvg` | graph | canonical | LEVEL 2 — synthetic | `O(N) time for the edges, O(N^2) memory for the dense matrix` | — | test_matches_the_definition_by_brute_force, test_hand_computed_examples, test_invariant_under_monotonic_transformation |
+| `mp` | subsequence | canonical | LEVEL 3 — reference | `O(N^2 * m) time, O(N^2) memory` | — | test_matrix_profile_matches_stumpy, test_matrix_profile_matches_brute_force |
+| `msc` | filterbank | project-defined | LEVEL 1 — invariant | `O(K * N)` | — | test_multi_scale_conv_stack |
+| `msrp` | recurrence | project-defined | LEVEL 1 — invariant | `O(S * N^2)` | — | test_multi_scale_rp_stack |
+| `mtf` | markov | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | — | test_mtf_matches_pyts, test_mtf_matches_definition |
+| `mtspec` | time_frequency | canonical | LEVEL 3 — reference | `O(K * F * n_fft log n_fft) for K tapers and F frames` | scipy (extra: spectral) | test_single_taper_matches_a_direct_periodogram, test_variance_falls_roughly_as_one_over_k, test_tapers_are_scipy_dpss |
+| `otf` | symbolic | project-defined | LEVEL 2 — synthetic | `O(N * m log m) time, O(W^2) memory; state space is m!` | — | test_logistic_map_has_forbidden_patterns_and_noise_does_not, test_lehmer_codes_are_a_bijection_onto_the_state_space, test_transition_matrix_counts_match_a_direct_tally, test_invariant_under_monotonic_transformation |
+| `ph` | topological | canonical | LEVEL 3 — reference | `O(N log N) for the diagram, O(P * bins^2) for the image` | — | test_persistence_image_matches_persim, test_persistence_diagram_matches_ripser, test_persistence_diagram_matches_brute_force |
+| `randproj` | projection | project-defined | LEVEL 1 — invariant | `O(size^2 * N)` | — | test_randproj_deterministic |
+| `rp` | recurrence | canonical | LEVEL 2 — synthetic | `O(N^2) time and memory` | — | test_recurrence_plot_matches_definition, test_recurrence_plot_symmetric_diag |
+| `sax` | symbolic | project-defined | LEVEL 3 — reference | `O(N + segments^2)` | — | test_sax_breakpoints_match_scipy_norm_ppf, test_sax_gaussian_breakpoints_match_published_table, test_sax_gaussian_is_invariant_to_affine_rescaling |
+| `shapelet` | subsequence | project-defined | LEVEL 1 — invariant | `O(k * N * length)` | — | test_shapelet_transform_basic |
+| `spec` | time_frequency | canonical | LEVEL 2 — synthetic | `O((N/hop) * win log win)` | — | test_spectrogram_matches_framed_rfft, test_spectrogram_locates_a_pure_tone |
+| `sst` | time_frequency | canonical | LEVEL 2 — synthetic | `O(S * N log N) time, O(S * N) memory` | — | test_constant_sinusoid_ridge_is_the_true_frequency, test_linear_chirp_ridge_follows_the_analytic_law, test_two_components_are_resolved |
+| `vg` | graph | canonical | LEVEL 2 — synthetic | `O(N^2)` | — | test_visibility_graph_matches_definition, test_visibility_graph_symmetry |
 
 ## References and caveats
 
@@ -132,6 +133,12 @@ no encoder has reached because no archive-scale run is committed yet
 
 - **Reference:** Wang & Oates (2015), IJCAI
 - **Provenance:** canonical
+
+### `mtspec`
+
+- **Reference:** Thomson (1982), Spectrum estimation and harmonic analysis, Proc. IEEE 70(9):1055-1096
+- **Provenance:** canonical
+- **Caveats:** Requires SciPy for the DPSS tapers, which are the method itself; no approximation is substituted. Trades frequency resolution for variance: tones closer than 2NW/window_size are not separated.
 
 ### `otf`
 

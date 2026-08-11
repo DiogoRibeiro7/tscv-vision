@@ -14,6 +14,15 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`encoders.multitaper_spectrogram`** (registry key `mtspec`) — Thomson's
+  multitaper spectral estimator, averaging periodograms over orthogonal DPSS
+  tapers. Validated against the estimator's quantitative promise: the relative
+  variance of the estimate on Gaussian noise falls from ~0.93 with one taper
+  (the chi-square-with-2-degrees-of-freedom result) to ~0.18 with seven, and
+  single- and multi-taper outputs match periodograms computed directly from
+  `scipy.signal.windows.dpss`. Requires SciPy via the new `spectral` extra;
+  substituting an easier window would quietly make it a different estimator
+  under the same name.
 - **`encoders.delay_embedding_density`** (registry key `ded`) — a
   TSCV-Vision representation: Takens' delay embedding, with a two-dimensional
   projection of the reconstructed state space rendered as an occupancy image,

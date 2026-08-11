@@ -43,6 +43,13 @@ STFT magnitude, normalised to `[0, 1]`. `hop` defaults to `win // 4`, `win >= 8`
 Returns `(win // 2 + 1, n_frames)`; the signal is zero-padded so every sample is
 covered.
 
+### `multitaper_spectrogram(x, *, fs=1.0, window_size=128, hop_length=None, time_bandwidth=3.5, n_tapers=None, n_fft=None, scaling='log_power', dynamic_range=80.0, nan_policy='raise') -> Array`
+Thomson's multitaper spectral estimate: average the periodograms taken with K
+orthogonal DPSS (Slepian) tapers, reducing variance by roughly `1/K` at the
+cost of widening resolution to `2NW/window_size`. A lower-variance alternative
+to `spectrogram`. **Requires SciPy** (`pip install 'tscv-vision[spectral]'`) —
+the DPSS tapers are the method, so no easier window is substituted.
+
 ### `cwt(x, scales, wavelet='morlet', *, nan_policy='raise') -> Array`
 Continuous wavelet transform magnitude, `(len(scales), N)`. Non-Morlet wavelets
 require PyWavelets.
@@ -149,7 +156,7 @@ Stack or average several encoders that produce the same shape.
 ### Registry
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.
-Registered keys: `gaf`, `gadf`, `rp`, `spec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `otf`, `gdf`,
+Registered keys: `gaf`, `gadf`, `rp`, `spec`, `mtspec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `otf`, `gdf`,
 `msrp`, `ded`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `randproj`,
 `ensemble`, plus the long-form aliases `visibility_graph`, `matrix_profile`,
 `persistence_image`, `window_attention` and the legacy key `tpa`
@@ -240,7 +247,7 @@ image = rep.transform(series)                  # (32, 32) for any series length
 
 # Assemble an experiment from methods that are actually validated:
 list_representations(canonical_method=True, min_validation_level=3)
-# ['gadf', 'gaf', 'mp', 'mtf', 'ph']
+# ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
 ```
 
 ### Interfaces

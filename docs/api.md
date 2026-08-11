@@ -60,6 +60,16 @@ frequencies (constant sinusoid, linear chirp, two-component signal).
 Markov Transition Field `(N, N)` over `bins` quantile states. Verified against
 `pyts.image.MarkovTransitionField`.
 
+### `ordinal_transition_field(x, *, order=3, delay=1, image_size=None, tie_policy='stable', mode='field', seed=0, nan_policy='raise') -> Array`
+**TSCV-Vision representation**, not a published image algorithm. Embeds the
+series, replaces each window by its ordinal permutation (Bandt & Pompe, 2002)
+labelled by an exact Lehmer code, estimates the pattern-to-pattern transition
+matrix, and lays it out as a field in the manner of the MTF. Uses only the
+*ordering* of values, so it is invariant under any strictly increasing
+transformation and discards all amplitude information. The state space is
+`order!`, hence the cap at `MAX_ORDINAL_ORDER = 7`. Unobserved states get
+all-zero rows rather than an invented uniform distribution.
+
 ### `persistence_diagram(x, *, include_infinite=False, nan_policy='raise') -> Array`
 Exact 0-dimensional sublevel-set persistence diagram, `(n_pairs, 2)` of
 `(birth, death)`. Verified against Ripser.
@@ -129,7 +139,7 @@ Stack or average several encoders that produce the same shape.
 ### Registry
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.
-Registered keys: `gaf`, `gadf`, `rp`, `spec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `gdf`,
+Registered keys: `gaf`, `gadf`, `rp`, `spec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `otf`, `gdf`,
 `msrp`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `randproj`,
 `ensemble`, plus the long-form aliases `visibility_graph`, `matrix_profile`,
 `persistence_image`, `window_attention` and the legacy key `tpa`

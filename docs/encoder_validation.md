@@ -39,6 +39,7 @@ no encoder has reached because no archive-scale run is committed yet
 | `msc` | filterbank | project-defined | LEVEL 1 — invariant | `O(K * N)` | test_multi_scale_conv_stack |
 | `msrp` | recurrence | project-defined | LEVEL 1 — invariant | `O(S * N^2)` | test_multi_scale_rp_stack |
 | `mtf` | markov | canonical | LEVEL 3 — reference | `O(N^2) time and memory` | test_mtf_matches_pyts, test_mtf_matches_definition |
+| `otf` | symbolic | project-defined | LEVEL 2 — synthetic | `O(N * m log m) time, O(W^2) memory; state space is m!` | test_logistic_map_has_forbidden_patterns_and_noise_does_not, test_lehmer_codes_are_a_bijection_onto_the_state_space, test_transition_matrix_counts_match_a_direct_tally, test_invariant_under_monotonic_transformation |
 | `ph` | topological | canonical | LEVEL 3 — reference | `O(N log N) for the diagram, O(P * bins^2) for the image` | test_persistence_image_matches_persim, test_persistence_diagram_matches_ripser, test_persistence_diagram_matches_brute_force |
 | `randproj` | projection | project-defined | LEVEL 1 — invariant | `O(size^2 * N)` | test_randproj_deterministic |
 | `rp` | recurrence | canonical | LEVEL 2 — synthetic | `O(N^2) time and memory` | test_recurrence_plot_matches_definition, test_recurrence_plot_symmetric_diag |
@@ -124,6 +125,12 @@ no encoder has reached because no archive-scale run is committed yet
 
 - **Reference:** Wang & Oates (2015), IJCAI
 - **Provenance:** canonical
+
+### `otf`
+
+- **Reference:** Bandt & Pompe (2002), Permutation entropy, PRL 88:174102 (ordinal encoding); Small (2013) and McCullough et al. (2015) (ordinal transition networks)
+- **Provenance:** project-defined
+- **Caveats:** TSCV-Vision representation. Composes Bandt-Pompe ordinal patterns with an ordinal transition network, laid out as a field in the manner of the MTF. The ingredients are published; this exact composition is not, so it is not marked canonical. Uses only the ordering of values, so all amplitude information is discarded.
 
 ### `ph`
 

@@ -48,6 +48,7 @@ no encoder has reached because no archive-scale run is committed yet
 | `randproj` | projection | project-defined | LEVEL 1 — invariant | `O(size^2 * N)` | — | test_randproj_deterministic |
 | `rp` | recurrence | canonical | LEVEL 2 — synthetic | `O(N^2) time and memory` | — | test_recurrence_plot_matches_definition, test_recurrence_plot_symmetric_diag |
 | `sax` | symbolic | project-defined | LEVEL 3 — reference | `O(N + segments^2)` | — | test_sax_breakpoints_match_scipy_norm_ppf, test_sax_gaussian_breakpoints_match_published_table, test_sax_gaussian_is_invariant_to_affine_rescaling |
+| `scat` | scattering | canonical | LEVEL 3 — reference | `O(P * N log N) for P scattering paths` | kymatio (extra: scattering) | test_tensor_is_the_backend_output_verbatim, test_image_is_a_permutation_of_the_backend_coefficients, test_second_order_responds_to_amplitude_modulation |
 | `shapelet` | subsequence | project-defined | LEVEL 1 — invariant | `O(k * N * length)` | — | test_shapelet_transform_basic |
 | `spec` | time_frequency | canonical | LEVEL 2 — synthetic | `O((N/hop) * win log win)` | — | test_spectrogram_matches_framed_rfft, test_spectrogram_locates_a_pure_tone |
 | `sst` | time_frequency | canonical | LEVEL 2 — synthetic | `O(S * N log N) time, O(S * N) memory` | — | test_constant_sinusoid_ridge_is_the_true_frequency, test_linear_chirp_ridge_follows_the_analytic_law, test_two_components_are_resolved |
@@ -183,6 +184,12 @@ no encoder has reached because no archive-scale run is committed yet
 - **Reference:** Lin, Keogh, Wei & Lonardi (2007), Experiencing SAX, DMKD 15:107-144
 - **Provenance:** project-defined
 - **Caveats:** The symbolisation (`sax_symbols`) is canonical SAX and is reference-tested. The image itself — a symbol-equality matrix — is a project-defined recurrence plot in symbol space.
+
+### `scat`
+
+- **Reference:** Mallat (2012), Group invariant scattering, CPAM 65(10):1331-1398; Anden & Mallat (2014), Deep scattering spectrum, IEEE TSP 62(16):4114-4128
+- **Provenance:** canonical
+- **Caveats:** Time scattering via Kymatio, not joint time-frequency scattering: no released Kymatio exposes TimeFrequencyScattering, and approximating it by hand would carry the name without the method. This layer adds validation, deterministic coefficient ordering and a documented image layout; the transform itself is the backend's.
 
 ### `shapelet`
 

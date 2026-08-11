@@ -14,6 +14,20 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`tscv_vision.scattering`** (registry key `scat`) — wavelet scattering via
+  Kymatio, added as a thin validated layer rather than a reimplementation.
+  Contributes input validation, deterministic coefficient ordering, three
+  documented image layouts and axis metadata; the transform itself is the
+  backend's, and the tests assert the coefficients are returned verbatim and
+  the image is exactly the metadata-described permutation of them. Validated
+  against the property that motivates the second order: an amplitude-modulated
+  carrier produces more than twice the order-2 energy of a pure tone.
+  Requires the new `scattering` extra.
+
+  Named `scattering_transform`, not `joint_time_frequency_scattering`: no
+  released Kymatio exposes `TimeFrequencyScattering`, and approximating JTFS
+  by hand would carry the name without the method. JTFS is deferred until the
+  backend ships it.
 - **`tscv_vision.multivariate`** — a new module for encoders that take more
   than one series, since the univariate validator in `encoders` is the wrong
   contract for them and their output may be rectangular. Provides the shared

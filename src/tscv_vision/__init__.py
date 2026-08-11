@@ -34,6 +34,7 @@ __all__ = [
     "pipeline",
     "representations",
     "research",
+    "scattering",
     "stats",
     "streaming",
     "WindowedDataset",

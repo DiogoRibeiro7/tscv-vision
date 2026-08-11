@@ -153,6 +153,27 @@ returning `nan`. Verified against `stumpy.stump`.
 ### `ensemble(x, names=None, *, nan_policy='raise', weights=None, aggregate='stack') -> Array`
 Stack or average several encoders that produce the same shape.
 
+## Scattering
+
+`tscv_vision.scattering` wraps Kymatio. **Requires** it
+(`pip install 'tscv-vision[scattering]'`) — the cascade is the method, and a
+short NumPy approximation would not be it.
+
+### `scattering_transform(x, *, J=6, Q=8, format='image', log_scale=True, nan_policy='raise') -> Array`
+Wavelet scattering coefficients (Mallat 2012; Andén & Mallat 2014). Three
+layouts, all documented: `tensor` is the backend output verbatim; `image` is
+`(n_coefficients, n_times)` with rows sorted by `(order, -xi1, -xi2)` and
+described row-for-row by `scattering_meta`; `modulation` is the order-2
+`(spectral band × modulation rate)` matrix averaged over time.
+
+**This is time scattering, not joint time-frequency scattering.** No released
+Kymatio exposes `TimeFrequencyScattering`, and approximating JTFS by hand
+would carry the name without the method.
+
+### `scattering_meta(n_samples, *, J=6, Q=8) -> dict[str, Any]`
+Row labels for the `image` layout: `order`, `xi` and `j` per coefficient, in
+image order, so axes can be labelled rather than guessed.
+
 ## Multivariate encoders
 
 `tscv_vision.multivariate` holds encoders that take more than one series. They
@@ -187,7 +208,8 @@ encoders in this module.
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.
 Registered keys: `gaf`, `gadf`, `rp`, `spec`, `mtspec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `otf`, `gdf`,
-`msrp`, `ded`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `randproj`,
+`msrp`, `ded`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `scat`,
+`randproj`,
 `ensemble`, plus the long-form aliases `visibility_graph`, `matrix_profile`,
 `persistence_image`, `window_attention` and the legacy key `tpa`
 (→ `window_attention`).
@@ -277,7 +299,7 @@ image = rep.transform(series)                  # (32, 32) for any series length
 
 # Assemble an experiment from methods that are actually validated:
 list_representations(canonical_method=True, min_validation_level=3)
-# ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph']
+# ['gadf', 'gaf', 'mp', 'mtf', 'mtspec', 'ph', 'scat']
 ```
 
 ### Interfaces

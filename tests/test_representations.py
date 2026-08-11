@@ -291,6 +291,7 @@ def test_list_representations_filters() -> None:
         "mtf",
         "mtspec",
         "ph",
+        "scat",
     ]
 
 

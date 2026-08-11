@@ -2492,6 +2492,21 @@ register_encoder("visibility_graph", visibility_graph)
 register_encoder("matrix_profile", matrix_profile)
 register_encoder("persistence_image", persistence_image)
 register_encoder("window_attention", window_attention)
+def _scattering_encoder(x: Array, **kwargs: Any) -> Array:
+    """Registry entry point for the scattering encoder.
+
+    The import happens on call, not at module import: `scattering` imports
+    this module for its validators, so importing it back at module scope makes
+    the two modules circular whenever `scattering` is imported first.
+    """
+
+    from .scattering import _default_scattering
+
+    return _default_scattering(x, **kwargs)
+
+
+register_encoder("scat", _scattering_encoder)
+
 # Kept for backwards compatibility: "tpa" resolves to `window_attention`, which
 # is not the Temporal Pattern Attention architecture. See its docstring.
 register_encoder("tpa", window_attention)

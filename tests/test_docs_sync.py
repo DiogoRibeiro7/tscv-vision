@@ -30,6 +30,7 @@ from tscv_vision import (
     multivariate,
     representations,
     research,
+    scattering,
     sliding,
     stats,
 )
@@ -78,6 +79,8 @@ DOCUMENTED: dict[str, Any] = {
     "cross_recurrence_plot": multivariate.cross_recurrence_plot,
     "joint_recurrence_plot": multivariate.joint_recurrence_plot,
     "delay_embed": multivariate.delay_embed,
+    "scattering_transform": scattering.scattering_transform,
+    "scattering_meta": scattering.scattering_meta,
     "list_representations": representations.list_representations,
     "get_representation": representations.get_representation,
     "get_representation_info": representations.get_representation_info,
@@ -162,6 +165,7 @@ def test_documented_names_all_exist() -> None:
         pipeline,
         representations,
         multivariate,
+        scattering,
     )
     for name in _doc_entries():
         if name in DOCUMENTED:

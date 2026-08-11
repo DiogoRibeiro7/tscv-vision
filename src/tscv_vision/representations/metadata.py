@@ -187,6 +187,7 @@ _REF = "tests/test_reference_equivalence.py"
 _NEW = "tests/test_new_encoders.py"
 _PROP = "tests/test_encoder_properties.py"
 _REG = "tests/test_regression_outputs.py"
+_SST = "tests/test_synchrosqueezed.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -278,6 +279,30 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
             "whose normalisation has not been compared against Torrence & Compo "
             "or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising "
             "this to REFERENCE is a v0.3.0 item."
+        ),
+    ),
+    "sst": _info(
+        name="sst",
+        family="time_frequency",
+        input_kind="univariate",
+        output_kind="time_frequency",
+        canonical_method=True,
+        reference=(
+            "Daubechies, Lu & Wu (2011), Synchrosqueezed wavelet transforms, "
+            "ACHA 30(2):243-261"
+        ),
+        complexity="O(S * N log N) time, O(S * N) memory",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_SST}::test_constant_sinusoid_ridge_is_the_true_frequency",
+            f"{_SST}::test_linear_chirp_ridge_follows_the_analytic_law",
+            f"{_SST}::test_two_components_are_resolved",
+        ),
+        notes=(
+            "Reassigns CWT energy to the instantaneous frequency estimated from "
+            "the phase derivative, so ridges are far sharper than `cwt` or "
+            "`spec`. Magnitude output discards phase; reassignment is quantised "
+            "to the frequency grid."
         ),
     ),
     "mtf": _info(

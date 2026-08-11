@@ -47,6 +47,15 @@ covered.
 Continuous wavelet transform magnitude, `(len(scales), N)`. Non-Morlet wavelets
 require PyWavelets.
 
+### `synchrosqueezed_cwt(x, *, fs=1.0, scales=None, wavelet='morlet', frequencies=64, voices=32, threshold=None, magnitude=True, log_scale=False, nan_policy='raise') -> Array`
+Synchrosqueezed CWT: a `(frequencies, N)` time-frequency image in which
+coefficient energy is reassigned to the instantaneous frequency estimated from
+the phase derivative, giving far sharper ridges than `cwt` or `spectrogram`.
+Not a renamed CWT — the reassignment step is what makes it. `magnitude=False`
+returns the complex transform, which keeps phase but cannot be fed to the image
+feature extractors. Validated against analytically known instantaneous
+frequencies (constant sinusoid, linear chirp, two-component signal).
+
 ### `mtf(x, bins=8, weighted=False, *, nan_policy='raise') -> Array`
 Markov Transition Field `(N, N)` over `bins` quantile states. Verified against
 `pyts.image.MarkovTransitionField`.
@@ -111,7 +120,7 @@ Stack or average several encoders that produce the same shape.
 ### Registry
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.
-Registered keys: `gaf`, `gadf`, `rp`, `spec`, `cwt`, `ph`, `eph`, `mtf`, `gdf`,
+Registered keys: `gaf`, `gadf`, `rp`, `spec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `gdf`,
 `msrp`, `dtw`, `sax`, `msc`, `attn`, `vg`, `shapelet`, `mp`, `randproj`,
 `ensemble`, plus the long-form aliases `visibility_graph`, `matrix_profile`,
 `persistence_image`, `window_attention` and the legacy key `tpa`

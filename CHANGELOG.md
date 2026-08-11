@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **`encoders.synchrosqueezed_cwt`** (registry key `sst`) — synchrosqueezed
+  continuous wavelet transform. Energy is reassigned along the frequency axis
+  to the instantaneous frequency estimated from the phase derivative, computed
+  exactly in the Fourier domain, so ridges are sharply localised rather than
+  smeared across the wavelet's bandwidth. Analytic Morlet and bump wavelets,
+  configurable frequency grid, optional log-magnitude and complex output.
+  Validated against signals with closed-form instantaneous frequency: the
+  ridge of a constant sinusoid and of a linear chirp sit within one frequency
+  bin of the analytic law, and energy is at least 5x more concentrated than
+  the plain `cwt` it is built on.
+- `benchmark.benchmark_time_frequency` — runtime, peak memory, sparsity and
+  energy concentration for the spectrogram, CWT and synchrosqueezed CWT.
+
 ## [0.2.0] - 2026-08-10
 
 Correctness and terminology release. Several routines were named after

@@ -6,11 +6,13 @@ This roadmap tracks what has shipped, what is next, and the long-term vision
 for **tscv-vision**. Items are grouped by theme rather than strictly by
 version so that priorities stay clear as scope shifts.
 
-**Current stance: feature freeze.** The library already exposes more surface
-than its validation supports. Until the benchmark study below exists, new
-encoders and new subsystems are out of scope; correctness, evidence and
-documentation come first. Proposals for new features are welcome as issues but
-will be queued behind the v0.3.0 items.
+**Current stance: new work must arrive validated.** The 0.2.0 review found
+that the API had outgrown its evidence. Rather than freeze the surface, the
+rule is now that nothing lands at LEVEL 0: every new encoder ships with a
+provenance entry in the metadata registry, tests against its defining formula
+or an independent implementation, a benchmark, and documentation — see
+`docs/encoder_validation.md` for where each one stands. The archive-scale
+benchmark study remains the v0.3.0 gate for any empirical claim.
 
 ---
 

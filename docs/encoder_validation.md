@@ -44,6 +44,7 @@ no encoder has reached because no archive-scale run is committed yet
 | `sax` | symbolic | project-defined | LEVEL 3 — reference | `O(N + segments^2)` | test_sax_breakpoints_match_scipy_norm_ppf, test_sax_gaussian_breakpoints_match_published_table, test_sax_gaussian_is_invariant_to_affine_rescaling |
 | `shapelet` | subsequence | project-defined | LEVEL 1 — invariant | `O(k * N * length)` | test_shapelet_transform_basic |
 | `spec` | time_frequency | canonical | LEVEL 2 — synthetic | `O((N/hop) * win log win)` | test_spectrogram_matches_framed_rfft, test_spectrogram_locates_a_pure_tone |
+| `sst` | time_frequency | canonical | LEVEL 2 — synthetic | `O(S * N log N) time, O(S * N) memory` | test_constant_sinusoid_ridge_is_the_true_frequency, test_linear_chirp_ridge_follows_the_analytic_law, test_two_components_are_resolved |
 | `vg` | graph | canonical | LEVEL 2 — synthetic | `O(N^2)` | test_visibility_graph_matches_definition, test_visibility_graph_symmetry |
 
 ## References and caveats
@@ -152,6 +153,12 @@ no encoder has reached because no archive-scale run is committed yet
 - **Reference:** Standard short-time Fourier transform magnitude
 - **Provenance:** canonical
 - **Caveats:** Magnitudes are normalised by the global maximum, so the output is scale-invariant.
+
+### `sst`
+
+- **Reference:** Daubechies, Lu & Wu (2011), Synchrosqueezed wavelet transforms, ACHA 30(2):243-261
+- **Provenance:** canonical
+- **Caveats:** Reassigns CWT energy to the instantaneous frequency estimated from the phase derivative, so ridges are far sharper than `cwt` or `spec`. Magnitude output discards phase; reassignment is quantised to the frequency grid.
 
 ### `vg`
 

@@ -43,6 +43,15 @@ STFT magnitude, normalised to `[0, 1]`. `hop` defaults to `win // 4`, `win >= 8`
 Returns `(win // 2 + 1, n_frames)`; the signal is zero-padded so every sample is
 covered.
 
+### `chirplet_transform(x, *, fs=1.0, frequencies=None, chirp_rates=None, window_size=64, hop_length=None, aggregate='max', log_scale=True, max_bytes=536870912, nan_policy='raise') -> Array`
+Chirplet transform (Mann & Haykin, 1995): correlates against Gaussian-windowed
+*chirped* atoms carrying a temporal centre, centre frequency, chirp rate and
+complex phase. An STFT is the special case `chirp_rate = 0`, and a test asserts
+exactly that agreement — sweeping the rate is what makes it a chirplet
+transform. `aggregate='none'` returns the full
+`(chirp_rates, frequencies, frames)` tensor, whose size is checked against
+`max_bytes` before allocation.
+
 ### `multitaper_spectrogram(x, *, fs=1.0, window_size=128, hop_length=None, time_bandwidth=3.5, n_tapers=None, n_fft=None, scaling='log_power', dynamic_range=80.0, nan_policy='raise') -> Array`
 Thomson's multitaper spectral estimate: average the periodograms taken with K
 orthogonal DPSS (Slepian) tapers, reducing variance by roughly `1/K` at the
@@ -207,7 +216,7 @@ encoders in this module.
 ### Registry
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.
-Registered keys: `gaf`, `gadf`, `rp`, `spec`, `mtspec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `otf`, `gdf`,
+Registered keys: `gaf`, `gadf`, `rp`, `spec`, `mtspec`, `chirplet`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `otf`, `gdf`,
 `msrp`, `ded`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `scat`,
 `randproj`,
 `ensemble`, plus the long-form aliases `visibility_graph`, `matrix_profile`,

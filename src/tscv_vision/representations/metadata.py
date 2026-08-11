@@ -203,6 +203,7 @@ _MTS = "tests/test_multitaper.py"
 _CRP = "tests/test_cross_recurrence.py"
 _JRP = "tests/test_joint_recurrence.py"
 _SCAT = "tests/test_scattering.py"
+_CHIRP = "tests/test_chirplet.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -295,6 +296,31 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
             "whose normalisation has not been compared against Torrence & Compo "
             "or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising "
             "this to REFERENCE is a v0.3.0 item."
+        ),
+    ),
+    "chirplet": _info(
+        name="chirplet",
+        family="time_frequency",
+        input_kind="univariate",
+        output_kind="time_frequency",
+        canonical_method=True,
+        reference=(
+            "Mann & Haykin (1995), The chirplet transform: physical "
+            "considerations, IEEE TSP 43(11):2745-2761"
+        ),
+        complexity="O(C * F * W log W) for C chirp rates and F frames",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_CHIRP}::test_recovers_the_chirp_rate_of_a_linear_chirp",
+            f"{_CHIRP}::test_crossing_chirps_show_both_rates",
+            f"{_CHIRP}::test_matches_a_direct_atom_correlation",
+        ),
+        notes=(
+            "Correlates against genuinely chirped atoms; an STFT is the "
+            "special case chirp_rate=0. Sweeps outside the requested rate grid "
+            "are attributed to the nearest rate, so the grid is a modelling "
+            "choice. The tensor is chirp_rates x frequencies x frames and is "
+            "size-checked before allocation."
         ),
     ),
     "mtspec": _info(

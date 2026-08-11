@@ -1518,6 +1518,181 @@ def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     return cast(Array, adj)
 
 
+DensityMode = Literal["histogram", "gaussian"]
+
+
+def delay_embedding_density(
+    x: Array,
+    *,
+    delay: int = 1,
+    dimension: int = 2,
+    bins: int = 64,
+    projection: tuple[int, int] = (0, 1),
+    density: DensityMode = "histogram",
+    sigma: float = 1.0,
+    normalize: bool = True,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    r"""Delay-embedding occupancy density — a TSCV-Vision representation.
+
+    .. note::
+       This is a **TSCV-Vision representation**. It is *not* a recurrence
+       plot: a recurrence plot is indexed by pairs of times and records which
+       states are close to which, whereas this image is indexed by state-space
+       coordinates and records how often the trajectory visits each region.
+       The delay embedding itself is Takens' (1981); rendering its occupancy
+       as an image is the part that is ours.
+
+    Builds the delay-coordinate embedding
+
+    .. math::
+
+        X_t = \bigl(x_t,\; x_{t+\tau},\; \dots,\; x_{t+(m-1)\tau}\bigr)
+
+    and histograms a chosen two-dimensional projection of the reconstructed
+    state space.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    delay:
+        Embedding delay :math:`\tau >= 1`. No automatic selection is provided;
+        choosing it from the data is a separate decision that deserves its own
+        documented method rather than a silent default.
+    dimension:
+        Embedding dimension :math:`m >= 2`.
+    bins:
+        Grid resolution per axis, ``>= 2``.
+    projection:
+        Which two embedding coordinates to plot, as ``(horizontal, vertical)``
+        indices into ``0 .. dimension - 1``. They must differ.
+    density:
+        ``"histogram"`` counts occupancy per bin. ``"gaussian"`` additionally
+        smooths those counts with a separable Gaussian, which turns the
+        discrete counts into a kernel-density-style image.
+    sigma:
+        Gaussian width in bins, ``> 0``. Ignored for ``"histogram"``.
+    normalize:
+        Divide by the maximum so the image lies in ``[0, 1]``. Set ``False``
+        to keep raw occupancy counts, whose total is the number of embedded
+        points.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(bins, bins)`` image indexed ``[vertical, horizontal]``, so that it
+        displays with the second projected coordinate on the y-axis.
+
+    Raises
+    ------
+    ValueError
+        If ``delay < 1``, ``dimension < 2``, ``bins < 2``, the projection
+        indices are equal or out of range, ``sigma <= 0``, the series is too
+        short for even one embedded point, or ``x`` is invalid.
+
+    Notes
+    -----
+    **Complexity** ``O(N)`` to embed and bin, plus ``O(bins^2)`` memory. The
+    Gaussian mode adds ``O(bins^2 · k)`` for a separable kernel of radius
+    ``k = ceil(3 sigma)``.
+
+    **Invariances** Invariant to time shift and to any permutation of the
+    trajectory's visits — only *where* the trajectory goes matters, not when.
+    Equivariant to affine rescaling of the values in the sense that the image
+    is unchanged, because the grid spans the observed range.
+
+    **Information lost** Chronological order, completely. Two series visiting
+    the same state-space cells in any order give the same image, so the
+    direction of travel around an orbit, and therefore time reversal, is
+    invisible. Occupancy within a bin is also lost — the image records how
+    often, not where inside.
+
+    **Use cases** Distinguishing periodic, quasi-periodic and chaotic
+    dynamics, where a limit cycle appears as a thin closed curve and noise as
+    diffuse cloud.
+
+    References
+    ----------
+    Takens (1981), "Detecting strange attractors in turbulence", in Dynamical
+    Systems and Turbulence, Lecture Notes in Mathematics 898:366-381.
+
+    Examples
+    --------
+    >>> image = delay_embedding_density(np.sin(np.linspace(0, 40.0, 500)), delay=8)
+    >>> image.shape
+    (64, 64)
+    """
+
+    series = _validate_series(x, nan_policy=nan_policy)
+    if delay < 1:
+        raise ValueError("delay must be >= 1")
+    if dimension < 2:
+        raise ValueError("dimension must be >= 2")
+    if bins < 2:
+        raise ValueError("bins must be >= 2")
+    if len(projection) != 2:
+        raise ValueError("projection must be a pair of coordinate indices")
+    horizontal, vertical = int(projection[0]), int(projection[1])
+    if horizontal == vertical:
+        raise ValueError("projection indices must differ")
+    for index in (horizontal, vertical):
+        if index < 0 or index >= dimension:
+            raise ValueError(
+                f"projection index {index} is outside [0, {dimension - 1}]"
+            )
+    if density not in {"histogram", "gaussian"}:
+        raise ValueError("density must be 'histogram' or 'gaussian'")
+    if density == "gaussian" and (not math.isfinite(sigma) or sigma <= 0):
+        raise ValueError("sigma must be positive and finite")
+
+    span = (dimension - 1) * delay
+    n_points = series.size - span
+    if n_points < 1:
+        raise ValueError(
+            f"series of length {series.size} is too short to embed at "
+            f"dimension={dimension}, delay={delay}; it needs at least "
+            f"{span + 1} samples"
+        )
+
+    first = series[horizontal * delay : horizontal * delay + n_points]
+    second = series[vertical * delay : vertical * delay + n_points]
+
+    lo = float(series.min())
+    hi = float(series.max())
+    if hi == lo:
+        # A constant series occupies a single point; place it in the centre
+        # rather than dividing by a zero range.
+        image = np.zeros((bins, bins), dtype=float)
+        image[bins // 2, bins // 2] = float(n_points)
+        return cast(Array, image / (image.max() + 1e-12) if normalize else image)
+
+    counts, _, _ = np.histogram2d(
+        second, first, bins=bins, range=[[lo, hi], [lo, hi]]
+    )
+
+    if density == "gaussian":
+        radius = int(math.ceil(3.0 * sigma))
+        offsets = np.arange(-radius, radius + 1, dtype=float)
+        kernel = np.exp(-0.5 * (offsets / sigma) ** 2)
+        kernel /= kernel.sum()
+        padded = np.pad(counts, radius, mode="constant")
+        # Separable: convolve rows then columns.
+        smoothed = np.apply_along_axis(
+            lambda row: np.convolve(row, kernel, mode="valid"), 1, padded
+        )
+        counts = np.apply_along_axis(
+            lambda col: np.convolve(col, kernel, mode="valid"), 0, smoothed
+        )
+
+    if normalize:
+        counts = counts / (counts.max() + 1e-12)
+    density_image: Array = counts
+    return density_image
+
+
 #: Largest embedding order accepted by :func:`ordinal_transition_field`.
 #: The state space is ``order!``, so the dense transition matrix grows as
 #: ``(order!)^2``: order 7 already needs ~203 MB. Bandt & Pompe recommend
@@ -2122,6 +2297,7 @@ register_encoder("mtf", mtf)
 register_encoder("otf", ordinal_transition_field)
 register_encoder("gdf", gdf)
 register_encoder("msrp", multi_scale_rp)
+register_encoder("ded", delay_embedding_density)
 register_encoder("dtw", dtw_matrix)
 register_encoder("sax", sax)
 register_encoder("msc", multi_scale_conv)
@@ -2166,6 +2342,8 @@ __all__ = [
     "OrdinalMode",
     "gdf",
     "multi_scale_rp",
+    "delay_embedding_density",
+    "DensityMode",
     "multi_scale_conv",
     "window_attention",
     "tpa",  # deprecated alias

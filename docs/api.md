@@ -88,6 +88,16 @@ A heuristic descriptor, **not** persistent homology.
 ### `gdf(x, *, nan_policy='raise') -> Array`
 Gramian Difference Field `(N, N)` in `[-1, 1]`.
 
+### `delay_embedding_density(x, *, delay=1, dimension=2, bins=64, projection=(0, 1), density='histogram', sigma=1.0, normalize=True, nan_policy='raise') -> Array`
+**TSCV-Vision representation**. Builds Takens' delay embedding and histograms a
+two-dimensional projection of the reconstructed state space, optionally
+Gaussian-smoothed. **Not a recurrence plot** — a recurrence plot is indexed by
+pairs of times and records which states are close; this image is indexed by
+state-space coordinates and records how often the trajectory visits each
+region. Chronological order is discarded entirely, so direction of travel is
+invisible. No automatic delay selection: choosing it from the data deserves its
+own documented method rather than a silent default.
+
 ### `multi_scale_rp(x, scales, *, nan_policy='raise') -> Array`
 Recurrence plots at several downsampling scales, `(len(scales), N, N)`.
 
@@ -140,7 +150,7 @@ Stack or average several encoders that produce the same shape.
 
 `register_encoder(name, func)` / `get_encoder(name)` / `ENCODER_REGISTRY`.
 Registered keys: `gaf`, `gadf`, `rp`, `spec`, `cwt`, `sst`, `ph`, `eph`, `mtf`, `otf`, `gdf`,
-`msrp`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `randproj`,
+`msrp`, `ded`, `dtw`, `sax`, `msc`, `attn`, `vg`, `hvg`, `shapelet`, `mp`, `randproj`,
 `ensemble`, plus the long-form aliases `visibility_graph`, `matrix_profile`,
 `persistence_image`, `window_attention` and the legacy key `tpa`
 (→ `window_attention`).

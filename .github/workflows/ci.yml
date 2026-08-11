@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  core:
+    name: Core (NumPy-only surface)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +29,8 @@ jobs:
         run: poetry run pytest --cov=src --cov-report=xml --cov-report=term
       - name: CLI smoke
         run: |
-          python - <<'PY'
+          # `poetry run`: the bare interpreter has no numpy, only the venv does.
+          poetry run python - <<'PY'
           import numpy as np
           np.save('series.npy', np.sin(np.linspace(0, 4*np.pi, 128)))
           PY
@@ -38,4 +40,76 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           files: coverage.xml
-          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Coverage reporting is not a quality gate, and tokenless uploads are
+          # rate-limited (HTTP 429), so a Codecov outage must not fail a build
+          # whose tests passed. Set the CODECOV_TOKEN secret for reliable
+          # uploads.
+          fail_ci_if_error: false
+
+  optional:
+    # Runs the `optional` marker excluded from the default addopts. Without this
+    # job a regression in the sklearn/torch/analytics integrations is invisible
+    # to the primary quality signal.
+    name: Optional integrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v3
+      - name: Install deps with optional extras
+        run: |
+          poetry env use 3.11
+          poetry install --extras "cli analytics domains mlops"
+          poetry run pip install torch --index-url https://download.pytorch.org/whl/cpu
+          poetry run pip install onnx onnxruntime tensorflow-cpu
+      - name: Optional-marked tests
+        run: poetry run pytest -m optional -p no:randomly
+
+  reference:
+    # Numerical equivalence against authoritative implementations. Split from
+    # `optional` so a heavyweight reference package cannot break the rest.
+    name: Reference equivalence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v3
+      - name: Install reference implementations
+        run: |
+          poetry env use 3.11
+          poetry install
+          poetry run pip install scipy scikit-image scikit-learn pyts ripser persim stumpy
+      - name: Equivalence tests
+        run: poetry run pytest -m optional tests/test_reference_equivalence.py -v
+
+  benchmark-smoke:
+    # The UCR/UEA sweep itself runs offline (the archive is not redistributable),
+    # but the harness must stay runnable so frozen results can be regenerated.
+    name: Benchmark harness smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v3
+      - name: Install deps
+        run: |
+          poetry env use 3.11
+          poetry install --extras "domains"
+      - name: Run harness on generated data
+        run: |
+          poetry run python -m tscv_vision.evaluation --synthetic \
+            --methods baseline-1nn-euclidean baseline-raw-logreg gasf-features \
+            --out "$RUNNER_TEMP/bench"
+          test -s "$RUNNER_TEMP/bench/results.csv"
+          test -s "$RUNNER_TEMP/bench/manifest.json"
+          test -s "$RUNNER_TEMP/bench/summary.md"

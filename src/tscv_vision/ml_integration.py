@@ -8,27 +8,26 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ._sklearn_compat import BaseEstimator, TransformerMixin
 from .sliding import features_for_sliding
 
 Array = NDArray[np.float64]
 
 if TYPE_CHECKING:  # pragma: no cover - import for type check only
-    import tensorflow as tf
     from onnx import TensorProto
-    from sklearn.base import BaseEstimator, TransformerMixin
-else:  # pragma: no cover - runtime fallback
-    class BaseEstimator:  # type: ignore[no-redef]
-        """Stub base class when sklearn is not installed."""
-
-    class TransformerMixin:  # type: ignore[no-redef]
-        """Stub mixin when sklearn is not installed."""
-
-    tf = None
-    TensorProto = Any  # type: ignore[misc]
+else:
+    TensorProto = Any
 
 
 class SklearnFeatureTransformer(TransformerMixin, BaseEstimator):  # type: ignore[misc]
     """scikit-learn transformer that extracts features from time series.
+
+    When scikit-learn is installed this subclasses the real
+    :class:`~sklearn.base.BaseEstimator`/:class:`~sklearn.base.TransformerMixin`,
+    so it composes with :class:`~sklearn.pipeline.Pipeline`,
+    :func:`~sklearn.model_selection.cross_val_score` and clone/grid-search.
+    Without scikit-learn it falls back to minimal stubs that still provide
+    ``get_params``/``set_params``/``fit_transform``.
 
     Parameters
     ----------
@@ -38,6 +37,14 @@ class SklearnFeatureTransformer(TransformerMixin, BaseEstimator):  # type: ignor
         Number of histogram bins.
     feature_names:
         Optional subset of feature extractor names.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> tr = SklearnFeatureTransformer(bins=8)
+    >>> out = tr.fit_transform(np.random.default_rng(0).random((3, 16)))
+    >>> out.shape[0]
+    3
     """
 
     def __init__(
@@ -51,16 +58,24 @@ class SklearnFeatureTransformer(TransformerMixin, BaseEstimator):  # type: ignor
         self.bins = bins
         self.feature_names = feature_names
 
-    def fit(self, X: Array, y: Any | None = None) -> SklearnFeatureTransformer:  # noqa: D401 - standard sklearn signature
-        """No-op fit method for compatibility."""
+    @staticmethod
+    def _check_X(X: Array) -> Array:
+        arr = np.asarray(X, dtype=float)
+        if arr.ndim != 2:
+            raise ValueError("X must be 2D array of shape (n_samples, n_points)")
+        return arr
+
+    def fit(self, X: Array, y: Any | None = None) -> SklearnFeatureTransformer:
+        """Validate ``X`` and record its shape; no statistics are learned."""
+        arr = self._check_X(X)
+        self.n_features_in_ = int(arr.shape[1])
         return self
 
     def transform(self, X: Array) -> Array:
-        X = np.asarray(X, dtype=float)
-        if X.ndim != 2:
-            raise ValueError("X must be 2D array of shape (n_samples, n_points)")
+        """Encode every row of ``X`` and return its image feature vector."""
+        arr = self._check_X(X)
         feats = []
-        for row in X:
+        for row in arr:
             f, _ = features_for_sliding(
                 row,
                 encoder=self.encoder,
@@ -70,7 +85,21 @@ class SklearnFeatureTransformer(TransformerMixin, BaseEstimator):  # type: ignor
                 feature_names=self.feature_names,
             )
             feats.append(f[0])
-        return np.stack(feats)
+        out: Array = np.stack(feats)
+        self.n_features_out_ = int(out.shape[1])
+        return out
+
+    def get_feature_names_out(self, input_features: Any = None) -> NDArray[np.str_]:
+        """Return generated feature names, requires a prior ``transform`` call."""
+        n_out = getattr(self, "n_features_out_", None)
+        if n_out is None:
+            raise AttributeError(
+                "call transform() before get_feature_names_out(); the output "
+                "dimensionality depends on the encoder and the installed "
+                "optional feature extractors"
+            )
+        prefix = f"{self.encoder}_"
+        return np.asarray([f"{prefix}{i}" for i in range(n_out)], dtype=object).astype(str)
 
 
 class TorchFeatureDataset:  # pragma: no cover - small wrapper

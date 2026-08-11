@@ -3,8 +3,8 @@ import pytest
 
 pytest.importorskip("sklearn")
 
-from tscv_vision import encoders
-from tscv_vision.pipeline import AdaptivePipeline, FeatureEnsemble, select_features
+from tscv_vision import encoders  # noqa: E402
+from tscv_vision.pipeline import AdaptivePipeline, FeatureEnsemble, select_features  # noqa: E402
 
 pytestmark = pytest.mark.optional
 

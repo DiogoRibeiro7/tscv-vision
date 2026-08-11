@@ -13,6 +13,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ._deprecation import deprecated_alias
+
 Array = NDArray[np.float64]
 
 # simple plugin registry -----------------------------------------------------
@@ -81,8 +83,14 @@ def track_experiment(
 
 # fairness & privacy ---------------------------------------------------------
 
-def bias_report(features: Array, groups: Array) -> dict[str, float]:
-    """Compute mean feature value per group and max disparity.
+def group_mean_disparity(features: Array, groups: Array) -> dict[str, float]:
+    """Report the mean feature value per group and the largest gap between them.
+
+    .. note::
+       This is a single descriptive statistic, not a fairness audit. It says
+       nothing about calibration, equalised odds, demographic parity of a
+       *model*, intersectional subgroups, or statistical significance of the
+       observed gap. Treat it as a screening signal only.
 
     Parameters
     ----------
@@ -94,7 +102,12 @@ def bias_report(features: Array, groups: Array) -> dict[str, float]:
     Returns
     -------
     dict
-        Mapping with per-group means and overall ``max_diff``.
+        Mapping with per-group means and the overall ``max_diff``.
+
+    Raises
+    ------
+    ValueError
+        If shapes disagree.
     """
 
     if features.shape != groups.shape:
@@ -104,34 +117,113 @@ def bias_report(features: Array, groups: Array) -> dict[str, float]:
     if len(uniq) < 2:
         max_diff = 0.0
     else:
-        diffs = [abs(means[str(a)] - means[str(b)]) for a in uniq for b in uniq]
-        max_diff = float(max(diffs))
+        values = list(means.values())
+        max_diff = float(max(values) - min(values))
     res: dict[str, float] = {**means, "max_diff": max_diff}
     return res
 
 
-def add_dp_noise(
-    features: Array, epsilon: float, *, rng: np.random.Generator | None = None
+bias_report = deprecated_alias(
+    group_mean_disparity,
+    "bias_report",
+    reason="The function reports group-mean disparity only, not a fairness analysis.",
+)
+
+
+def add_laplace_noise(
+    features: Array, scale: float, *, rng: np.random.Generator | None = None
 ) -> Array:
-    """Apply Laplace noise for simple differential privacy.
+    """Add zero-mean Laplace noise of the given ``scale`` to ``features``.
+
+    This is the raw mechanism primitive with no privacy semantics attached;
+    see :func:`add_dp_noise` for the calibrated Laplace mechanism.
 
     Parameters
     ----------
     features:
-        Feature array.
-    epsilon:
-        Privacy budget; must be > 0.
+        Array to perturb.
+    scale:
+        Laplace scale parameter ``b > 0``.
     rng:
         Optional random generator for reproducibility.
+
+    Raises
+    ------
+    ValueError
+        If ``scale`` is not positive.
+    """
+
+    if scale <= 0:
+        raise ValueError("scale must be positive")
+    if rng is None:
+        rng = np.random.default_rng()
+    noise: Array = rng.laplace(0.0, float(scale), size=np.shape(features))
+    return np.asarray(features, dtype=float) + noise
+
+
+def add_dp_noise(
+    features: Array,
+    epsilon: float,
+    *,
+    sensitivity: float,
+    rng: np.random.Generator | None = None,
+) -> Array:
+    """Apply the Laplace mechanism calibrated to ``sensitivity``.
+
+    Noise is drawn from ``Laplace(0, sensitivity / epsilon)``, which gives
+    ``epsilon``-differential privacy **only if** ``sensitivity`` is a correct
+    upper bound on the L1 sensitivity of the query that produced ``features``:
+
+    .. math::
+
+        \\Delta_1 = \\max_{D \\sim D'} \\lVert f(D) - f(D') \\rVert_1
+
+    over all pairs of neighbouring datasets under your chosen neighbouring
+    relation. The bound cannot be inferred from the data — it follows from the
+    query and from the clipping/normalisation applied beforehand. Passing an
+    under-estimate silently voids the guarantee.
+
+    Composition is also the caller's responsibility: releasing ``m`` such
+    vectors costs ``m * epsilon`` under basic (sequential) composition.
+
+    Parameters
+    ----------
+    features:
+        Query output to privatise.
+    epsilon:
+        Privacy budget; must be ``> 0``.
+    sensitivity:
+        L1 sensitivity of the query; must be ``> 0``. Required keyword —
+        there is no meaningful default.
+    rng:
+        Optional random generator for reproducibility.
+
+    Returns
+    -------
+    Array
+        Perturbed copy of ``features``.
+
+    Raises
+    ------
+    ValueError
+        If ``epsilon`` or ``sensitivity`` is not positive.
+
+    Examples
+    --------
+    >>> rng = np.random.default_rng(0)
+    >>> x = np.array([0.2, 0.9])          # a mean over values clipped to [0, 1]
+    >>> add_dp_noise(x, epsilon=1.0, sensitivity=1.0 / 100, rng=rng).shape
+    (2,)
     """
 
     if epsilon <= 0:
         raise ValueError("epsilon must be positive")
-    if rng is None:
-        rng = np.random.default_rng()
-    scale = 1.0 / epsilon
-    noise: Array = rng.laplace(0.0, scale, size=features.shape)
-    return features + noise
+    if sensitivity <= 0:
+        raise ValueError(
+            "sensitivity must be positive; it is the L1 sensitivity of the query "
+            "that produced 'features' and must be derived from the query, not the data"
+        )
+    return add_laplace_noise(features, float(sensitivity) / float(epsilon), rng=rng)
 
 
 # reporting ------------------------------------------------------------------
@@ -151,7 +243,9 @@ __all__ = [
     "register_plugin",
     "load_plugins",
     "track_experiment",
-    "bias_report",
+    "group_mean_disparity",
+    "bias_report",  # deprecated alias
+    "add_laplace_noise",
     "add_dp_noise",
     "generate_paper",
 ]

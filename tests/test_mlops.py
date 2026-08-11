@@ -1,23 +1,10 @@
-import importlib.util
-import pathlib
-import sys
 import threading
 import time
-import types
 
 import numpy as np
 import pytest
 
-pkg_path = pathlib.Path(__file__).resolve().parents[1] / "src" / "tscv_vision"
-pkg = types.ModuleType("tscv_vision")
-pkg.__path__ = [str(pkg_path)]
-sys.modules["tscv_vision"] = pkg
-
-spec = importlib.util.spec_from_file_location("tscv_vision.mlops", pkg_path / "mlops.py")
-assert spec and spec.loader
-mlops = importlib.util.module_from_spec(spec)
-sys.modules["tscv_vision.mlops"] = mlops
-spec.loader.exec_module(mlops)
+from tscv_vision import mlops
 
 
 def test_validate_features_raises_on_nan() -> None:

@@ -60,7 +60,7 @@ def test_encode_sliding_lazy() -> None:
     gen = encode_sliding(x, size=32, hop=16, lazy=True)
     assert not isinstance(gen, np.ndarray)
     collected = list(gen)
-    imgs_lazy, starts_lazy = zip(*collected)
+    imgs_lazy, starts_lazy = zip(*collected, strict=True)
     np.testing.assert_allclose(np.stack(imgs_lazy), eager)
     np.testing.assert_array_equal(np.array(starts_lazy), starts)
 
@@ -91,7 +91,7 @@ def test_features_for_sliding_lazy() -> None:
     gen = features_for_sliding(x, size=32, hop=32, lazy=True)
     assert not isinstance(gen, np.ndarray)
     collected = list(gen)
-    feats_lazy, starts_lazy = zip(*collected)
+    feats_lazy, starts_lazy = zip(*collected, strict=True)
     np.testing.assert_allclose(np.vstack(feats_lazy), eager_feats)
     np.testing.assert_array_equal(np.array(starts_lazy), starts)
 

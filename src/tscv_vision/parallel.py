@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -47,13 +47,18 @@ def map_dask(func: Callable[[T], R], data: Iterable[T], workers: int | None = No
 
     try:
         import dask
-        from dask import delayed
     except Exception as exc:  # pragma: no cover - import error
         raise ImportError("dask is required for map_dask") from exc
 
-    delayed_tasks = [delayed(func)(d) for d in data]
+    # dask has no explicit re-exports, and mypy sees it as `Any` when it is not
+    # installed. Going through an `Any` binding keeps this module clean under
+    # both environments without an ignore that goes stale in one of them.
+    dask_api: Any = dask
+    delayed_tasks = [dask_api.delayed(func)(d) for d in data]
     scheduler = "processes" if workers not in (None, 1) else "single-threaded"
-    results = dask.compute(*delayed_tasks, scheduler=scheduler, num_workers=workers)
+    results = dask_api.compute(
+        *delayed_tasks, scheduler=scheduler, num_workers=workers
+    )
     return list(results)
 
 

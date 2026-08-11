@@ -10,6 +10,8 @@ datasets.
 
 from __future__ import annotations
 
+import hashlib
+import warnings
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import product
@@ -206,22 +208,44 @@ def evolve_hyperparams(
     Returns
     -------
     Mapping[str, Any]
-        Best found parameter combination.
+        Best evaluated parameter combination.
+
+    Raises
+    ------
+    ValueError
+        If ``search_space`` is empty or the sizing arguments are not positive.
+
+    Notes
+    -----
+    The best individual is tracked as evaluations happen. Selecting it from
+    the final population by ``argmax`` of the previous generation's scores —
+    as this function did before 0.2.0 — can return an unevaluated offspring
+    that has nothing to do with the reported score.
     """
+
     keys = list(search_space)
+    if not keys:
+        raise ValueError("search_space cannot be empty")
+    if generations < 1 or population < 2:
+        raise ValueError("generations must be >= 1 and population >= 2")
     rng = np.random.default_rng(0)
 
     def random_individual() -> list[Any]:
         return [rng.choice(search_space[k]) for k in keys]
 
     population_data = [random_individual() for _ in range(population)]
-    scores = np.empty(population)
+    best_individual: list[Any] = population_data[0]
+    best_score = -np.inf
 
     for _ in range(generations):
+        scores = np.empty(len(population_data))
         for i, individual in enumerate(population_data):
             params = dict(zip(keys, individual, strict=True))
             scores[i] = objective(params)
-        idx = np.argsort(-scores)[: population // 2]
+            if scores[i] > best_score:
+                best_score = float(scores[i])
+                best_individual = list(individual)
+        idx = np.argsort(-scores)[: max(1, len(population_data) // 2)]
         parents = [population_data[i] for i in idx]
         # produce offspring with simple mutation
         offspring: list[list[Any]] = []
@@ -232,8 +256,7 @@ def evolve_hyperparams(
             offspring.append(p)
         population_data = parents + offspring
 
-    best_idx = int(np.argmax(scores))
-    return dict(zip(keys, population_data[best_idx], strict=True))
+    return dict(zip(keys, best_individual, strict=True))
 
 
 def select_feature_subset(
@@ -497,10 +520,22 @@ class AutoTSCV:
                 scores.append(-float(np.mean((pred - y[test_idx]) ** 2)))
         return float(np.mean(scores)) if scores else -np.inf
 
+    @staticmethod
+    def _fingerprint(X: Sequence[Array], y: Array) -> str:
+        """Cheap content hash used to detect train/validation reuse."""
+
+        digest = hashlib.sha256()
+        for x in X:
+            digest.update(np.ascontiguousarray(x, dtype=float).tobytes())
+        digest.update(np.ascontiguousarray(y).tobytes())
+        return digest.hexdigest()
+
     def fit(self, X: Sequence[Array], y: Array) -> AutoTSCV:
+        """Profile the data, then search encoders and estimators by CV."""
         X = list(X)
         if len(X) != y.shape[0]:
             raise ValueError("X and y length mismatch")
+        self._train_fingerprint = self._fingerprint(X, y)
         self.profile(X)
         candidates = suggest_encoders(X[0])
         best_score = -np.inf
@@ -528,16 +563,103 @@ class AutoTSCV:
     # ------------------------------------------------------------------
     # Prediction and validation
     def predict(self, X: Sequence[Array]) -> Array:
+        """Predict targets for ``X`` with the selected encoder and model."""
         if self.model_ is None or self.encoder_ is None:
             raise RuntimeError("AutoTSCV not fitted")
         feats = self._encode(X, self.encoder_, self.encoder_params_)
         return self.model_.predict(feats)
 
     def validate(self, X: Sequence[Array], y: Array) -> float:
+        """Score the *already selected* pipeline on ``X``/``y``.
+
+        .. warning::
+           This is only a generalisation estimate when ``X``/``y`` were **not**
+           seen by :meth:`fit`. The encoder and estimator were chosen by
+           cross-validating on the training data, so re-scoring that same data
+           is optimistically biased; a :class:`UserWarning` is emitted if the
+           inputs are byte-identical to the training set. For an unbiased
+           number without a held-out split, use :meth:`nested_score`.
+
+        Parameters
+        ----------
+        X, y:
+            Preferably a held-out set that :meth:`fit` never saw.
+
+        Returns
+        -------
+        float
+            Mean score over the time-series splits of ``X``.
+
+        Raises
+        ------
+        RuntimeError
+            If the model has not been fitted.
+        """
+
         if self.model_ is None or self.encoder_ is None:
             raise RuntimeError("AutoTSCV not fitted")
+        X = list(X)
+        if getattr(self, "_train_fingerprint", None) == self._fingerprint(X, y):
+            warnings.warn(
+                "validate() was called on the data used by fit(); encoders and "
+                "models were selected on this data, so the result is an "
+                "optimistically biased model-selection score, not a "
+                "generalisation estimate. Pass a held-out set or use "
+                "nested_score().",
+                UserWarning,
+                stacklevel=2,
+            )
         feats = self._encode(X, self.encoder_, self.encoder_params_)
         return self._cross_val(feats, y, type(self.model_), self.model_.get_params())
+
+    def nested_score(self, X: Sequence[Array], y: Array, *, outer_splits: int = 3) -> float:
+        """Unbiased score via nested (forward-chaining) cross-validation.
+
+        The entire :meth:`fit` procedure — profiling, encoder selection and
+        model selection — is repeated on each outer training split and scored
+        on the following, unseen block. No choice is informed by the data it
+        is scored on.
+
+        Parameters
+        ----------
+        X, y:
+            Full dataset; splits respect temporal order.
+        outer_splits:
+            Number of outer forward-chaining splits.
+
+        Returns
+        -------
+        float
+            Mean outer-fold score, or ``-inf`` if no split was usable.
+
+        Raises
+        ------
+        ValueError
+            If ``X`` and ``y`` lengths disagree.
+        """
+
+        X = list(X)
+        if len(X) != y.shape[0]:
+            raise ValueError("X and y length mismatch")
+        scores: list[float] = []
+        for train_idx, test_idx in _ts_splits(len(X), outer_splits):
+            inner = AutoTSCV(
+                task=self.task,
+                tradeoff=self.tradeoff,
+                random_state=self.random_state,
+                cv=self.cv,
+            )
+            try:
+                inner.fit([X[i] for i in train_idx], y[train_idx])
+            except (RuntimeError, ValueError):  # pragma: no cover - degenerate split
+                continue
+            pred = inner.predict([X[i] for i in test_idx])
+            truth = y[test_idx]
+            if self.task == "classification":
+                scores.append(float(np.mean(pred == truth)))
+            else:
+                scores.append(-float(np.mean((pred - truth) ** 2)))
+        return float(np.mean(scores)) if scores else -np.inf
 
     # ------------------------------------------------------------------
     # Drift detection

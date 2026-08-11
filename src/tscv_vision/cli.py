@@ -51,7 +51,7 @@ def main() -> None:
         "Examples:\n"
         "  tscv-features --encoders gaf --input x.npy --output out.npz\n"
         "  tscv-features --encoders gdf --input x.npy --output out.npz\n"
-        "  tscv-features --encoders msc,tpa --sliding --win-len 128 --hop 64 "
+        "  tscv-features --encoders msc,attn --sliding --win-len 128 --hop 64 "
         "--input x.npy --output out.npz"
     )
     parser = argparse.ArgumentParser(
@@ -63,7 +63,7 @@ def main() -> None:
     parser.add_argument(
         "--encoders",
         default="gaf",
-        help="Comma-separated encoder names (e.g. gaf,rp,gdf,tpa,msc)",
+        help="Comma-separated encoder names (e.g. gaf,rp,gdf,attn,msc)",
     )
     parser.add_argument("--input", nargs="+", required=True, help="Path(s) to .npy time series")
     parser.add_argument(

@@ -34,7 +34,7 @@ long_description = (ROOT / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="tscv-vision",
-    version="0.1.1",
+    version="0.2.0",
     description="Computer-vision feature engineering for 1D time series (NumPy-first).",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -52,8 +52,10 @@ setup(
     package_dir={"": "src"},
     python_requires=">=3.10,<3.13",
     install_requires=["numpy>=1.24"],
+    # Keep in sync with [tool.poetry.extras] in pyproject.toml;
+    # tests/test_docs_sync.py enforces it.
     extras_require={
-        "torch": ["torch>=2.2"],
+        "torch": ["torch>=2.2", "torchvision"],
         "mlops": ["fastapi>=0.110", "prometheus-client>=0.20", "feast>=0.42"],
         "analytics": [
             "shap",
@@ -64,10 +66,16 @@ setup(
             "seaborn",
             "pywavelets",
         ],
+        "ml": ["scikit-learn>=1.3"],
+        "research": ["scikit-learn>=1.3", "pyts>=0.13"],
         "domains": ["scikit-learn>=1.3"],
         "cli": ["pyyaml"],
         "gpu": ["cupy"],
-        "research": [],
+        "speed": ["numba>=0.59"],
+        "io": ["pyarrow>=14", "h5py"],
+        "streaming": ["redis>=5", "kafka-python", "pika"],
+        "distributed": ["dask>=2024.1"],
+        "onnx": ["onnx"],
     },
     entry_points={
         "console_scripts": [

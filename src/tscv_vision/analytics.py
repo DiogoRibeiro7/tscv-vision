@@ -8,7 +8,9 @@ from typing import Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from ._deprecation import deprecated_alias, warn_renamed
 from .encoders import _validate_series
+from .stats import welch_ttest
 
 Array = NDArray[np.float64]
 
@@ -21,8 +23,19 @@ def _scale_unit(x: Array) -> Array:
     return (x - x_min) / denom
 
 
-class TSHAPExplainer:
-    """Time-series SHAP explainer using window and frequency occlusion.
+class OcclusionExplainer:
+    """Time-domain and frequency-domain occlusion explainer.
+
+    The explainer replaces contiguous windows of the series (and, separately,
+    individual rFFT coefficients) with a baseline value and records how much
+    the model output moves. It is a *perturbation* method.
+
+    .. note::
+       These are **not** SHAP values. No additive feature attribution is
+       computed, no coalitions are sampled, and the resulting scores satisfy
+       none of the Shapley axioms (efficiency, symmetry, dummy, additivity)
+       from Lundberg & Lee (2017). Use :func:`shap_values` — which delegates
+       to the :mod:`shap` package — if you need Shapley-style attributions.
 
     Parameters
     ----------
@@ -34,7 +47,7 @@ class TSHAPExplainer:
     Examples
     --------
     >>> model = lambda x: float(x.mean())
-    >>> explainer = TSHAPExplainer(model)
+    >>> explainer = OcclusionExplainer(model)
     >>> t_imp, f_imp = explainer.explain(np.arange(8.0), window=4)
     >>> t_imp.shape, f_imp.shape
     ((8,), (5,))
@@ -92,6 +105,22 @@ class TSHAPExplainer:
         freq_vals = _scale_unit(freq_vals)
 
         return time_vals, freq_vals
+
+
+class TSHAPExplainer(OcclusionExplainer):
+    """Deprecated alias for :class:`OcclusionExplainer`.
+
+    The old name wrongly implied SHAP-style attribution; the implementation
+    has always been window/frequency occlusion.
+    """
+
+    def __init__(self, model: Callable[[Array], float], baseline: float | None = None):
+        warn_renamed(
+            "TSHAPExplainer",
+            "OcclusionExplainer",
+            "The implementation performs occlusion, not Shapley attribution.",
+        )
+        super().__init__(model, baseline)
 
 
 def shap_values(model: Callable[[Array], Array], data: Array) -> Array:
@@ -357,41 +386,97 @@ def project_features(features: Array, method: str = "tsne", **kwargs: Any) -> Ar
 
 
 def group_significance(a: Array, b: Array) -> tuple[float, float]:
-    """Welch t-test between 1D samples ``a`` and ``b``."""
-    x = np.asarray(a, dtype=float)
-    y = np.asarray(b, dtype=float)
-    if x.ndim != 1 or y.ndim != 1:
-        raise ValueError("inputs must be 1D")
-    nx, ny = x.size, y.size
-    mean_diff = x.mean() - y.mean()
-    var = x.var(ddof=1) / nx + y.var(ddof=1) / ny
-    t = mean_diff / np.sqrt(var)
-    from math import erf, sqrt
+    """Two-sided Welch (unequal-variance) t-test between 1D samples.
 
-    p = 2 * (1 - 0.5 * (1 + erf(abs(t) / sqrt(2))))
-    return float(t), float(p)
+    The p-value comes from the Student t distribution evaluated at the
+    Welch--Satterthwaite degrees of freedom, so it is valid for small
+    samples. Use :func:`tscv_vision.stats.welch_ttest` to also obtain the
+    degrees of freedom.
+
+    Parameters
+    ----------
+    a, b:
+        1D samples with at least two observations each.
+
+    Returns
+    -------
+    tuple
+        ``(t_statistic, p_value)``.
+
+    Examples
+    --------
+    >>> t, p = group_significance(np.array([1.0, 2.0, 3.0]), np.array([4.0, 5.0, 6.0]))
+    >>> round(p, 4)
+    0.0203
+    """
+
+    result = welch_ttest(np.asarray(a, dtype=float), np.asarray(b, dtype=float))
+    return result.statistic, result.pvalue
 
 
-def cross_causal_lag(x: Array, y: Array, max_lag: int = 10) -> int:
-    """Lag of maximum cross-correlation of ``x`` leading ``y``."""
+def cross_correlation_lag(x: Array, y: Array, max_lag: int = 10) -> int:
+    """Lag in ``[-max_lag, max_lag]`` maximising the Pearson cross-correlation.
+
+    The correlation at lag ``k`` pairs ``x[t]`` with ``y[t + k]``, so a
+    positive result means ``x`` leads ``y`` by that many samples. Before
+    0.2.0 the branches were swapped and the returned lag had the opposite
+    sign to the documented convention.
+
+    .. warning::
+       This is a purely associational statistic. A peak in cross-correlation
+       is **not** evidence of a causal relationship: confounding, shared
+       trends and autocorrelation all produce lagged correlation without
+       causation. Use a dedicated causal-inference procedure (e.g. Granger
+       causality with stationarity checks, or convergent cross mapping) if a
+       causal claim is required.
+
+    Parameters
+    ----------
+    x, y:
+        1D series of equal length.
+    max_lag:
+        Largest absolute lag to evaluate; must be ``>= 0`` and shorter than
+        the series.
+
+    Returns
+    -------
+    int
+        Lag with the highest correlation.
+
+    Raises
+    ------
+    ValueError
+        If the inputs are not 1D, differ in length, or ``max_lag`` is invalid.
+    """
+
     xs = np.asarray(x, dtype=float)
     ys = np.asarray(y, dtype=float)
     if xs.ndim != 1 or ys.ndim != 1:
         raise ValueError("inputs must be 1D")
     if xs.size != ys.size:
         raise ValueError("inputs must have equal length")
-    lags = range(-max_lag, max_lag + 1)
+    if max_lag < 0 or max_lag >= xs.size:
+        raise ValueError("max_lag must be in [0, len(x) - 1]")
+    lags = list(range(-max_lag, max_lag + 1))
     corrs: list[float] = []
     for lag in lags:
-        if lag < 0:
-            corr = np.corrcoef(xs[:lag], ys[-lag:])[0, 1]
-        elif lag > 0:
-            corr = np.corrcoef(xs[lag:], ys[:-lag])[0, 1]
+        if lag > 0:  # pair x[t] with y[t + lag]
+            corr = np.corrcoef(xs[:-lag], ys[lag:])[0, 1]
+        elif lag < 0:  # pair x[t - lag] with y[t]
+            corr = np.corrcoef(xs[-lag:], ys[:lag])[0, 1]
         else:
             corr = np.corrcoef(xs, ys)[0, 1]
-        corrs.append(corr)
-    best = int(list(lags)[int(np.nanargmax(corrs))])
-    return best
+        corrs.append(float(corr))
+    if np.all(np.isnan(corrs)):
+        raise ValueError("cross-correlation is undefined (constant input)")
+    return int(lags[int(np.nanargmax(corrs))])
+
+
+cross_causal_lag = deprecated_alias(
+    cross_correlation_lag,
+    "cross_causal_lag",
+    reason="Maximum cross-correlation does not establish causality.",
+)
 
 
 def generate_report(results: dict[str, Any]) -> str:
@@ -403,7 +488,8 @@ def generate_report(results: dict[str, Any]) -> str:
 
 
 __all__ = [
-    "TSHAPExplainer",
+    "OcclusionExplainer",
+    "TSHAPExplainer",  # deprecated alias
     "gaf_attribution",
     "rp_attribution",
     "spectrogram_attribution",
@@ -415,6 +501,7 @@ __all__ = [
     "counterfactual_replace",
     "project_features",
     "group_significance",
-    "cross_causal_lag",
+    "cross_correlation_lag",
+    "cross_causal_lag",  # deprecated alias
     "generate_report",
 ]

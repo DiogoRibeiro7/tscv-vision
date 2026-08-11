@@ -3,9 +3,9 @@ import pytest
 
 pytest.importorskip("sklearn")
 
-from tscv_vision.benchmark import benchmark_pipeline, benchmark_streaming
-from tscv_vision.pipeline import AdaptivePipeline
-from tscv_vision.streaming import StreamingEncoder
+from tscv_vision.benchmark import benchmark_pipeline, benchmark_streaming  # noqa: E402
+from tscv_vision.pipeline import AdaptivePipeline  # noqa: E402
+from tscv_vision.streaming import StreamingEncoder  # noqa: E402
 
 pytestmark = pytest.mark.optional
 

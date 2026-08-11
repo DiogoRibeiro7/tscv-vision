@@ -11,19 +11,24 @@ from typing import Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from ._sklearn_compat import BaseEstimator, TransformerMixin
+
 try:  # optional dependency
     from sklearn.feature_selection import mutual_info_classif
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import Matern
     from sklearn.linear_model import LogisticRegression
-    from sklearn.model_selection import KFold, cross_val_score
+    from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
+    from sklearn.pipeline import Pipeline
 except Exception:  # pragma: no cover - optional dependency
     mutual_info_classif = cast(Any, None)
     GaussianProcessRegressor = cast(Any, None)
     Matern = cast(Any, None)
     LogisticRegression = cast(Any, None)
     KFold = cast(Any, None)
+    StratifiedKFold = cast(Any, None)
     cross_val_score = cast(Any, None)
+    Pipeline = cast(Any, None)
 
 from .encoders import ENCODER_REGISTRY, get_encoder
 from .features import extract_feature_vector
@@ -117,6 +122,92 @@ def select_features(
     return np.sort(idx)
 
 
+class FeatureSelector(TransformerMixin, BaseEstimator):  # type: ignore[misc]
+    """scikit-learn transformer wrapping :func:`select_features`.
+
+    Exists so that supervised feature selection can be placed **inside** a
+    :class:`~sklearn.pipeline.Pipeline` and therefore re-fitted on each
+    training fold. Selecting features on the full matrix and then calling
+    :func:`~sklearn.model_selection.cross_val_score` leaks the validation
+    folds into the selection step and inflates the reported score.
+
+    Parameters
+    ----------
+    method:
+        Selection criterion, see :func:`select_features`.
+    k:
+        Number of features to keep.
+    cv:
+        Inner folds used by the ``"stability"`` method.
+    random_state:
+        Seed for reproducibility.
+
+    Raises
+    ------
+    ImportError
+        If scikit-learn is not installed.
+    """
+
+    def __init__(
+        self,
+        *,
+        method: str = "mutual_info",
+        k: int = 10,
+        cv: int = 3,
+        random_state: int | None = None,
+    ) -> None:
+        if cross_val_score is None:  # pragma: no cover - optional dependency
+            raise ImportError("scikit-learn required for FeatureSelector")
+        self.method = method
+        self.k = k
+        self.cv = cv
+        self.random_state = random_state
+
+    def fit(self, X: Array, y: Array) -> FeatureSelector:
+        """Fit the selector on ``X``/``y`` only."""
+        X = _validate_dataset(X)
+        y = _validate_target(y, X.shape[0])
+        self.support_ = select_features(
+            X,
+            y,
+            method=self.method,
+            k=min(self.k, X.shape[1]),
+            cv=self.cv,
+            random_state=self.random_state,
+        )
+        self.n_features_in_ = int(X.shape[1])
+        return self
+
+    def transform(self, X: Array) -> Array:
+        """Restrict ``X`` to the selected columns."""
+        support = getattr(self, "support_", None)
+        if support is None:
+            raise ValueError("FeatureSelector must be fitted first")
+        X = _validate_dataset(X)
+        selected: Array = X[:, support]
+        return selected
+
+
+def _make_estimator(
+    *,
+    method: str,
+    k: int,
+    cv: int,
+    random_state: int | None,
+) -> Any:
+    """Build a leakage-safe ``selection -> classifier`` pipeline."""
+
+    return Pipeline(
+        [
+            (
+                "select",
+                FeatureSelector(method=method, k=k, cv=cv, random_state=random_state),
+            ),
+            ("clf", LogisticRegression(max_iter=1000, random_state=random_state)),
+        ]
+    )
+
+
 @dataclass
 class AdaptivePipeline:
     """Select encoders and features based on data characteristics.
@@ -131,6 +222,12 @@ class AdaptivePipeline:
     >>> feats = pipe.fit_transform(X, y)
     >>> feats.shape[0]
     10
+
+    Notes
+    -----
+    :meth:`fit` chooses the encoder by cross-validating on the data it is
+    given, so any score computed on that same data afterwards is optimistic.
+    Use :meth:`nested_score` for a generalisation estimate.
     """
 
     encoders: list[str] = field(default_factory=list)
@@ -218,6 +315,19 @@ class AdaptivePipeline:
     def optimize(self, X: Array, y: Array, *, n_iter: int = 10) -> tuple[str, int, float]:
         """Return best encoder and feature count via Bayesian optimization.
 
+        Feature selection runs **inside** each cross-validation fold (through
+        :class:`FeatureSelector` in an sklearn :class:`~sklearn.pipeline.Pipeline`),
+        so the reported per-configuration scores are not contaminated by the
+        validation folds. Before 0.2.0 selection was performed once on the
+        whole matrix, which leaked every fold into the selection step.
+
+        .. warning::
+           The returned score is the **maximum over the searched
+           configurations** and is therefore still optimistically biased as an
+           estimate of generalisation ("winner's curse"): the search itself saw
+           all of ``X``. Use :meth:`nested_score` for an unbiased estimate, or
+           evaluate the chosen configuration on a held-out test set.
+
         Parameters
         ----------
         X, y:
@@ -229,16 +339,16 @@ class AdaptivePipeline:
         -------
         tuple
             ``(best_encoder, best_k, score)`` where ``score`` is the best
-            cross-validation accuracy.
+            cross-validation accuracy observed during the search.
+
+        Raises
+        ------
+        ImportError
+            If scikit-learn is not installed.
         """
 
         X = _validate_dataset(X)
         y = _validate_target(y, X.shape[0])
-        sample = self._extract_all(X[:1], self.encoders[0])
-        n_features = sample.shape[1]
-        ks = np.arange(5, min(50, n_features) + 1, 5)
-        configs: list[list[float]] = []
-        scores: list[float] = []
         if (
             GaussianProcessRegressor is None
             or Matern is None
@@ -246,8 +356,24 @@ class AdaptivePipeline:
             or cross_val_score is None
         ):
             raise ImportError("scikit-learn required for optimization")
+        best_enc, best_k, best_score, _ = self._search(X, y, n_iter=n_iter)
+        return best_enc, best_k, best_score
+
+    def _search(
+        self, X: Array, y: Array, *, n_iter: int
+    ) -> tuple[str, int, float, list[float]]:
+        """Run the Bayesian search and return the best config plus all scores."""
+
+        sample = self._extract_all(X[:1], self.encoders[0])
+        n_features = sample.shape[1]
+        ks = np.arange(5, min(50, n_features) + 1, 5)
+        if ks.size == 0:
+            ks = np.array([n_features], dtype=int)
+        configs: list[list[float]] = []
+        scores: list[float] = []
         gp = GaussianProcessRegressor(kernel=Matern(nu=2.5), random_state=self.random_state)
         rng = np.random.default_rng(self.random_state)
+        cache: dict[str, Array] = {}
         for _ in range(max(2, n_iter)):
             if len(configs) >= 2:
                 gp.fit(np.array(configs), np.array(scores))
@@ -262,23 +388,86 @@ class AdaptivePipeline:
                 enc_idx = float(rng.integers(len(self.encoders)))
                 k = float(rng.choice(ks))
             name = self.encoders[int(enc_idx)]
-            feats = self._extract_all(X, name)
-            sel = select_features(
-                feats,
-                y,
+            if name not in cache:
+                cache[name] = self._extract_all(X, name)
+            feats = cache[name]
+            est = _make_estimator(
                 method=self.feature_select,
                 k=min(int(k), feats.shape[1]),
                 cv=self.cv,
                 random_state=self.random_state,
             )
-            lr = LogisticRegression(max_iter=1000, random_state=self.random_state)
-            score = cross_val_score(lr, feats[:, sel], y, cv=self.cv).mean()
+            score = float(cross_val_score(est, feats, y, cv=self.cv).mean())
             configs.append([enc_idx, float(int(k))])
             scores.append(score)
         best = int(np.argmax(scores))
-        best_enc = self.encoders[int(configs[best][0])]
-        best_k = int(configs[best][1])
-        return best_enc, best_k, float(scores[best])
+        return (
+            self.encoders[int(configs[best][0])],
+            int(configs[best][1]),
+            float(scores[best]),
+            scores,
+        )
+
+    def nested_score(
+        self, X: Array, y: Array, *, n_iter: int = 10, outer_cv: int = 5
+    ) -> float:
+        """Unbiased accuracy estimate via nested cross-validation.
+
+        The complete selection procedure — encoder search, feature-count
+        search and feature selection — is re-run from scratch on each outer
+        training fold and scored on the corresponding held-out fold, which
+        never influences any choice. This is the number to report in a paper;
+        the score returned by :meth:`optimize` is a model-selection score, not
+        a generalisation estimate.
+
+        Parameters
+        ----------
+        X, y:
+            Dataset and labels.
+        n_iter:
+            Inner search iterations per outer fold.
+        outer_cv:
+            Number of outer folds.
+
+        Returns
+        -------
+        float
+            Mean accuracy over the outer folds.
+
+        Raises
+        ------
+        ImportError
+            If scikit-learn is not installed.
+        """
+
+        X = _validate_dataset(X)
+        y = _validate_target(y, X.shape[0])
+        if StratifiedKFold is None or cross_val_score is None:
+            raise ImportError("scikit-learn required for nested_score")
+        splitter = StratifiedKFold(
+            n_splits=outer_cv, shuffle=True, random_state=self.random_state
+        )
+        outer_scores: list[float] = []
+        for train_idx, test_idx in splitter.split(X, y):
+            inner = AdaptivePipeline(
+                encoders=list(self.encoders),
+                feature_select=self.feature_select,
+                k=self.k,
+                cv=self.cv,
+                random_state=self.random_state,
+            )
+            enc, best_k, _, _ = inner._search(X[train_idx], y[train_idx], n_iter=n_iter)
+            train_feats = inner._extract_all(X[train_idx], enc)
+            test_feats = inner._extract_all(X[test_idx], enc)
+            est = _make_estimator(
+                method=self.feature_select,
+                k=min(best_k, train_feats.shape[1]),
+                cv=self.cv,
+                random_state=self.random_state,
+            )
+            est.fit(train_feats, y[train_idx])
+            outer_scores.append(float(np.mean(est.predict(test_feats) == y[test_idx])))
+        return float(np.mean(outer_scores))
 
 
 @dataclass
@@ -354,4 +543,4 @@ class FeatureEnsemble:
         return self.transform(X)
 
 
-__all__ = ["AdaptivePipeline", "FeatureEnsemble", "select_features"]
+__all__ = ["AdaptivePipeline", "FeatureEnsemble", "FeatureSelector", "select_features"]

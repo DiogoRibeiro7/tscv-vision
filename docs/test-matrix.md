@@ -8,6 +8,28 @@ The test suite uses markers to manage optional dependencies and runtime requirem
 | `slow` | Long-running stress or performance tests | none |
 | `optional` | Tests that rely on optional third-party packages | varies (e.g. `torch`, `sklearn`, `matplotlib`) |
 
+`pytest`'s default `addopts` is `-m 'not slow and not gpu and not optional'`.
+That is a convenience for local runs, **not** a statement that the excluded
+tests do not matter: CI runs each marker in its own job so nothing hides behind
+the default expression.
+
+| CI job | Command | Covers |
+| ------ | ------- | ------ |
+| `core` | `pytest` | NumPy-only surface, plus the encoder definition tests and the docs-sync guard |
+| `optional` | `pytest -m optional` | scikit-learn, torch, TensorFlow, ONNX, matplotlib integrations |
+| `reference` | `pytest -m optional tests/test_reference_equivalence.py` | numerical equivalence with scikit-image, SciPy, pyts, ripser, persim, stumpy |
+| `benchmark-smoke` | `python -m tscv_vision.evaluation --synthetic` | the benchmark harness stays runnable |
+
+## Validation layers
+
+| Layer | File | Runs by default |
+| ----- | ---- | --------------- |
+| Definition checks (published formula, re-implemented naively) | `tests/test_encoder_definitions.py` | yes |
+| Reference equivalence (third-party implementations) | `tests/test_reference_equivalence.py` | no (`optional`) |
+| Documentation sync (signatures, dimensions, registry, versions) | `tests/test_docs_sync.py` | yes |
+| Statistical behaviour without SciPy | `tests/test_stats.py` | yes |
+| Benchmark harness | `tests/test_evaluation.py` | yes (skipped without scikit-learn) |
+
 ## Running Tests
 
 Run only the core tests (default):

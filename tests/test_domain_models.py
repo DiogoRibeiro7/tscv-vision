@@ -3,7 +3,7 @@ import pytest
 
 pytest.importorskip("sklearn")
 
-from tscv_vision.domains import (
+from tscv_vision.domains import (  # noqa: E402
     DomainAdapter,
     PrototypicalClassifier,
     classification_metrics,

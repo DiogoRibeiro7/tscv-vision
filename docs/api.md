@@ -170,6 +170,15 @@ invariant to a common rescaling. `binary=False` returns
 `1 - distance / max(distance)`, matching `recurrence_plot`'s convention, and
 the two agree exactly for `cross_recurrence_plot(x, x)`.
 
+### `joint_recurrence_plot(X, *, dimension=1, delay=1, epsilon=None, recurrence_rate=0.1, metric='euclidean', combination='and', nan_policy='raise') -> Array`
+Joint recurrence of a `(n_samples, n_channels)` matrix (Romano et al., 2004):
+each channel gets its own recurrence plot with its **own** threshold, and the
+canonical `combination='and'` keeps only where every channel recurs at once.
+Per-channel thresholding is what makes it meaningful across channels with
+different units — the result is unchanged by rescaling any single channel,
+which a shared `epsilon` would not be. `product` and `mean` are TSCV-Vision
+extensions combining continuous similarities rather than indicators.
+
 ### `delay_embed(x, dimension=1, delay=1) -> Array`
 Delay-coordinate embedding, `(N - (m-1)tau, m)`. Shared by the recurrence
 encoders in this module.

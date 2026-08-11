@@ -27,6 +27,16 @@
   as the offset of the dominant diagonal, by hitting the target recurrence
   rate to within 0.01, and by agreeing exactly with `encoders.recurrence_plot`
   on `cross_recurrence_plot(x, x)`.
+- **`multivariate.joint_recurrence_plot`** — joint recurrence across the
+  channels of a `(n_samples, n_channels)` matrix (Romano et al., 2004),
+  reusing the recurrence machinery introduced with the cross recurrence plot.
+  Each channel is thresholded separately, so the result is unchanged by
+  rescaling any single channel by a factor of 1000, which a shared threshold
+  would not survive. Only `combination='and'` is the canonical definition;
+  `product` and `mean` are labelled TSCV-Vision extensions. Validated by
+  reduction to a plain recurrence plot on one channel, by equalling the
+  product of its own per-channel plots, and by coupled logistic maps recurring
+  jointly more than uncoupled ones.
 - `RepresentationInfo` gained `optional_dependency`, and multivariate encoders
   get their own `MULTIVARIATE_METADATA` so that living outside the univariate
   registry does not mean living outside the provenance system.

@@ -34,8 +34,10 @@ Metric = Literal["euclidean", "manhattan", "chebyshev"]
 
 __all__ = [
     "Metric",
+    "Combination",
     "delay_embed",
     "cross_recurrence_plot",
+    "joint_recurrence_plot",
 ]
 
 
@@ -246,3 +248,169 @@ def cross_recurrence_plot(
 
     threshold = _recurrence_threshold(distances, epsilon, recurrence_rate)
     return cast(Array, (distances <= threshold).astype(float))
+
+
+Combination = Literal["and", "product", "mean"]
+
+
+def _validate_channels(X: Array, nan_policy: NanPolicy) -> Array:
+    """Return ``X`` as a validated ``(n_samples, n_channels)`` float matrix."""
+
+    matrix = np.asarray(X, dtype=float)
+    if matrix.ndim != 2:
+        raise ValueError("X must be 2D with shape (n_samples, n_channels)")
+    if matrix.shape[1] < 1:
+        raise ValueError("X must have at least one channel")
+    columns = [
+        _validate_series(matrix[:, c], nan_policy=nan_policy)
+        for c in range(matrix.shape[1])
+    ]
+    lengths = {column.size for column in columns}
+    if len(lengths) > 1:
+        raise ValueError(
+            "channels have different lengths after applying nan_policy "
+            f"({sorted(lengths)}); nan_policy='omit' can do this, so use "
+            "'interpolate' or clean the data first"
+        )
+    return cast(Array, np.column_stack(columns))
+
+
+def joint_recurrence_plot(
+    X: Array,
+    *,
+    dimension: int = 1,
+    delay: int = 1,
+    epsilon: float | Array | None = None,
+    recurrence_rate: float = 0.1,
+    metric: Metric = "euclidean",
+    combination: Combination = "and",
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    r"""Joint recurrence plot of a multi-channel series.
+
+    Each channel gets its own recurrence plot, with its **own** threshold, and
+    the results are combined. The canonical definition is the logical AND:
+
+    .. math::
+
+        JR[i, j] = \prod_{c=1}^{C}
+        \Theta\bigl(\varepsilon_c - \lVert X^{(c)}_i - X^{(c)}_j \rVert\bigr)
+Vertigr)
+
+    so a joint recurrence occurs only where *every* channel recurs
+    simultaneously. Thresholding per channel is what makes this meaningful on
+    channels with different units — a single global epsilon would let the
+    largest-amplitude channel decide the result.
+
+    Parameters
+    ----------
+    X:
+        ``(n_samples, n_channels)`` matrix. Channels share the sample axis.
+    dimension, delay:
+        Embedding parameters, applied identically to every channel.
+    epsilon:
+        Threshold. A scalar applies to every channel; an array of length
+        ``n_channels`` gives each its own; ``None`` (default) targets
+        ``recurrence_rate`` per channel, as in :func:`cross_recurrence_plot`.
+    recurrence_rate:
+        Per-channel target rate used when ``epsilon`` is ``None``. The *joint*
+        rate is lower — for ``C`` independent channels roughly
+        ``recurrence_rate ** C``, which is the point of the AND.
+    metric:
+        Distance metric, shared by all channels.
+    combination:
+        ``"and"`` is the canonical binary definition. ``"product"`` and
+        ``"mean"`` are **TSCV-Vision extensions** that combine the continuous
+        per-channel similarities instead of thresholded indicators, giving a
+        graded image; they are not part of the published joint recurrence
+        plot.
+    nan_policy:
+        How to treat NaNs, applied per channel.
+
+    Returns
+    -------
+    ndarray
+        ``(W, W)`` symmetric matrix for ``W = n_samples - (m - 1) * tau``.
+        Binary for ``"and"``, continuous in ``[0, 1]`` otherwise.
+
+    Raises
+    ------
+    ValueError
+        If ``X`` is not 2D, has no channels, the channels end up with different
+        lengths, ``epsilon`` has the wrong shape, or a parameter is invalid.
+
+    Notes
+    -----
+    **Complexity** ``O(C * W^2 * m)`` time and ``O(W^2)`` memory; per-channel
+    plots are accumulated rather than all held at once.
+
+    **Invariances** Invariant to channel order for all three combination
+    rules, since AND, product and mean are commutative. Symmetric with a
+    filled diagonal. With per-channel automatic thresholds it is invariant to
+    rescaling **any individual channel**, which a shared epsilon would not be.
+
+    **Information lost** The binary form records only simultaneous recurrence,
+    so it cannot say which channels contributed. Channels recurring at
+    different times cancel to zero even when each is individually structured.
+
+    **Use cases** Detecting shared dynamical states across simultaneously
+    recorded channels, and phase synchronisation analysis.
+
+    References
+    ----------
+    Romano, Thiel, Kurths & von Bloh (2004), "Multivariate recurrence plots",
+    Physics Letters A 330(3-4):214-223.  Marwan, Romano, Thiel & Kurths (2007),
+    Physics Reports 438(5-6):237-329, section 3.4.
+
+    Examples
+    --------
+    >>> t = np.linspace(0, 12.0, 64)
+    >>> joint_recurrence_plot(np.column_stack([np.sin(t), np.cos(t)])).shape
+    (64, 64)
+    """
+
+    matrix = _validate_channels(X, nan_policy)
+    n_channels = matrix.shape[1]
+    if combination not in {"and", "product", "mean"}:
+        raise ValueError("combination must be 'and', 'product' or 'mean'")
+
+    if epsilon is None:
+        thresholds: list[float | None] = [None] * n_channels
+    else:
+        values = np.atleast_1d(np.asarray(epsilon, dtype=float))
+        if values.size == 1:
+            thresholds = [float(values[0])] * n_channels
+        elif values.size == n_channels:
+            thresholds = [float(v) for v in values]
+        else:
+            raise ValueError(
+                "epsilon must be a scalar or have one entry per channel "
+                f"({n_channels}), got {values.size}"
+            )
+
+    joint: Array | None = None
+    for channel in range(n_channels):
+        embedded = delay_embed(matrix[:, channel], dimension, delay)
+        distances = _pairwise_distance(embedded, embedded, metric)
+        if combination == "and":
+            threshold = _recurrence_threshold(
+                distances, thresholds[channel], recurrence_rate
+            )
+            plot = (distances <= threshold).astype(float)
+        else:
+            peak = float(distances.max())
+            plot = np.ones_like(distances) if peak <= 0 else 1.0 - distances / peak
+        if joint is None:
+            joint = plot
+        elif combination == "mean":
+            joint = joint + plot
+        else:
+            # "and" multiplies indicators, "product" multiplies similarities.
+            joint = joint * plot
+
+    if joint is None:  # pragma: no cover - n_channels >= 1 is validated above
+        raise ValueError("X must have at least one channel")
+    if combination == "mean":
+        joint = joint / n_channels
+    result: Array = joint
+    return result

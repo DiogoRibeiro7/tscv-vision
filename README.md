@@ -174,6 +174,7 @@ Encoders taking more than one series live in `tscv_vision.multivariate`:
 | Encoder | Function | Output |
 | --- | --- | --- |
 | Cross recurrence plot | `multivariate.cross_recurrence_plot(x, y)` | `(N_x, N_y)` |
+| Joint recurrence plot | `multivariate.joint_recurrence_plot(X)` | `(W, W)` |
 
 ### Feature Extractors
 

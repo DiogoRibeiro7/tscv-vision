@@ -8,59 +8,15 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ._sklearn_compat import BaseEstimator, TransformerMixin
 from .sliding import features_for_sliding
 
 Array = NDArray[np.float64]
 
 if TYPE_CHECKING:  # pragma: no cover - import for type check only
     from onnx import TensorProto
-    from sklearn.base import BaseEstimator, TransformerMixin
 else:
-    try:  # prefer the real sklearn base classes when available
-        from sklearn.base import BaseEstimator, TransformerMixin
-
-        HAS_SKLEARN = True
-    except Exception:  # pragma: no cover - runtime fallback without sklearn
-        HAS_SKLEARN = False
-
-        class BaseEstimator:  # type: ignore[no-redef]
-            """Stub base class used when scikit-learn is not installed.
-
-            It reproduces just enough of the estimator protocol
-            (``get_params``/``set_params``) for :class:`SklearnFeatureTransformer`
-            to be usable standalone, but it is *not* a drop-in replacement for
-            scikit-learn: install the ``ml`` extra for real interoperability.
-            """
-
-            def get_params(self, deep: bool = True) -> dict[str, Any]:
-                """Return the constructor parameters of this estimator."""
-                import inspect
-
-                names = [
-                    p.name
-                    for p in inspect.signature(type(self).__init__).parameters.values()
-                    if p.name != "self" and p.kind is not p.VAR_KEYWORD
-                ]
-                return {name: getattr(self, name) for name in names}
-
-            def set_params(self, **params: Any) -> BaseEstimator:
-                """Set constructor parameters on this estimator."""
-                for key, value in params.items():
-                    if key not in self.get_params():
-                        raise ValueError(f"Invalid parameter {key!r}")
-                    setattr(self, key, value)
-                return self
-
-        class TransformerMixin:  # type: ignore[no-redef]
-            """Stub mixin providing ``fit_transform`` without scikit-learn."""
-
-            def fit_transform(self, X: Any, y: Any = None, **kwargs: Any) -> Any:
-                """Fit to ``X`` then transform it."""
-                if y is None:
-                    return self.fit(X, **kwargs).transform(X)  # type: ignore[attr-defined]
-                return self.fit(X, y, **kwargs).transform(X)  # type: ignore[attr-defined]
-
-    TensorProto = Any  # type: ignore[misc]
+    TensorProto = Any
 
 
 class SklearnFeatureTransformer(TransformerMixin, BaseEstimator):  # type: ignore[misc]

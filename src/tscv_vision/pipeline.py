@@ -11,8 +11,9 @@ from typing import Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from ._sklearn_compat import BaseEstimator, TransformerMixin
+
 try:  # optional dependency
-    from sklearn.base import BaseEstimator, TransformerMixin
     from sklearn.feature_selection import mutual_info_classif
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import Matern
@@ -20,8 +21,6 @@ try:  # optional dependency
     from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
     from sklearn.pipeline import Pipeline
 except Exception:  # pragma: no cover - optional dependency
-    BaseEstimator = cast(Any, object)
-    TransformerMixin = cast(Any, object)
     mutual_info_classif = cast(Any, None)
     GaussianProcessRegressor = cast(Any, None)
     Matern = cast(Any, None)

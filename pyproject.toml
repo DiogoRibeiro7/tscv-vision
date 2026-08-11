@@ -94,6 +94,14 @@ ignore_missing_imports = true
 strict = true
 warn_unused_ignores = true
 
+# FastAPI's route decorators are typed when fastapi is installed and `Any` when
+# it is not, so `disallow_untyped_decorators` fires only in environments without
+# the `mlops` extra -- and any per-line ignore would then be unused in the
+# environments that do have it. Relax the check for this module instead.
+[[tool.mypy.overrides]]
+module = "tscv_vision.mlops"
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 addopts = "-m 'not slow and not gpu and not optional'"
 markers = [

@@ -18,7 +18,12 @@ from tscv_vision.scattering import (
     scattering_transform,
 )
 
-pytest.importorskip("kymatio", reason="the scattering cascade is the backend's")
+# Importing `kymatio` alone is not enough: kymatio 0.3.0 pulls in
+# scipy.special.sph_harm, removed in SciPy 1.17, so the package imports
+# while `kymatio.numpy` does not. Guard on what is actually used.
+pytest.importorskip(
+    "kymatio.numpy", reason="the scattering cascade is the backend's"
+)
 
 pytestmark = pytest.mark.optional
 

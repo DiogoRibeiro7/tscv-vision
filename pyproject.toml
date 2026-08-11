@@ -79,8 +79,9 @@ distributed = ["dask"]
 onnx = ["onnx"]
 # DPSS tapers for the multitaper spectrogram.
 spectral = ["scipy"]
-# Wavelet scattering cascade.
-scattering = ["kymatio"]
+# Wavelet scattering cascade. Kymatio 0.3.0 needs scipy<1.17, which is
+# expressed on the dependency itself.
+scattering = ["kymatio", "scipy"]
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]

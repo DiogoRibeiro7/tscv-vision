@@ -29,6 +29,12 @@ its name.
    the paper is exactly the failure this package corrected in 0.2.0. When
    Kymatio releases JTFS, it can be added here as a separate encoder under its
    own name. See ``ROADMAP.md``.
+
+.. warning::
+   Kymatio 0.3.0 imports ``scipy.special.sph_harm``, which SciPy removed in
+   1.17. The ``scattering`` extra therefore constrains SciPy accordingly; in
+   an environment with a newer SciPy the backend imports but cannot be used,
+   and this module says so rather than reporting a missing package.
 """
 
 from __future__ import annotations
@@ -57,7 +63,15 @@ def _require_kymatio() -> Any:
 
     try:
         from kymatio.numpy import Scattering1D
-    except Exception as exc:  # pragma: no cover - optional dependency
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        import importlib.util
+
+        if importlib.util.find_spec("kymatio") is not None:
+            raise ImportError(
+                "Kymatio is installed but unusable in this environment: "
+                f"{exc}. Kymatio 0.3.0 imports scipy.special.sph_harm, which "
+                "SciPy removed in 1.17, so it needs `scipy<1.17`."
+            ) from exc
         raise ImportError(
             "Kymatio is required for the scattering transform. The cascade is "
             "the method; a short NumPy approximation would not be it. Install "

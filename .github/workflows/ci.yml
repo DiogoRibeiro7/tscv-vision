@@ -86,7 +86,7 @@ jobs:
           poetry env use 3.11
           poetry install
           # kymatio 0.3.0 uses scipy.special.sph_harm, removed in SciPy 1.17.
-          poetry run pip install "scipy<1.17" scikit-image scikit-learn pyts \n            ripser persim stumpy kymatio
+          poetry run pip install "scipy<1.17" scikit-image scikit-learn pyts ripser persim stumpy kymatio
       - name: Equivalence tests
         run: |
           poetry run pytest -m optional tests/test_reference_equivalence.py -v

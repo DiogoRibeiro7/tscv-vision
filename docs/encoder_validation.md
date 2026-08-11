@@ -27,6 +27,7 @@ no encoder has reached because no archive-scale run is committed yet
 | Encoder | Family | Provenance | Validation | Complexity | Optional dependency | Backing tests |
 | --- | --- | --- | --- | --- | --- | --- |
 | `attn` | attention | project-defined | LEVEL 2 — synthetic | `O(W^2 * window) for W = N - window + 1` | — | test_window_attention_matches_softmax_definition |
+| `chirplet` | time_frequency | canonical | LEVEL 2 — synthetic | `O(C * F * W log W) for C chirp rates and F frames` | — | test_recovers_the_chirp_rate_of_a_linear_chirp, test_crossing_chirps_show_both_rates, test_matches_a_direct_atom_correlation |
 | `cross_recurrence_plot` | recurrence | canonical | LEVEL 2 — synthetic | `O(N_x * N_y * m) time and O(N_x * N_y) memory` | — | test_self_cross_recurrence_matches_encoders_recurrence_plot, test_phase_shift_moves_the_diagonal_by_the_lag, test_automatic_threshold_hits_the_target_rate |
 | `cwt` | time_frequency | project-defined | LEVEL 0 — smoke | `O(S * N log N)` | pywavelets (extra: analytics) for non-Morlet wavelets | — |
 | `ded` | nonlinear_dynamics | project-defined | LEVEL 2 — synthetic | `O(N) to embed and bin, O(bins^2) memory` | — | test_logistic_map_traces_its_analytic_parabola, test_unnormalised_mass_is_the_number_of_embedded_points, test_periodic_signal_is_far_more_concentrated_than_noise, test_invariant_to_affine_rescaling |
@@ -61,6 +62,12 @@ no encoder has reached because no archive-scale run is committed yet
 - **Reference:** Vaswani et al. (2017), Attention Is All You Need, NeurIPS (scaled dot-product attention)
 - **Provenance:** project-defined
 - **Caveats:** Parameter-free self-attention between sliding windows. It is not Temporal Pattern Attention (Shih, Sun & Lee, 2019), which it was incorrectly named after before 0.2.0.
+
+### `chirplet`
+
+- **Reference:** Mann & Haykin (1995), The chirplet transform: physical considerations, IEEE TSP 43(11):2745-2761
+- **Provenance:** canonical
+- **Caveats:** Correlates against genuinely chirped atoms; an STFT is the special case chirp_rate=0. Sweeps outside the requested rate grid are attributed to the nearest rate, so the grid is a modelling choice. The tensor is chirp_rates x frequencies x frames and is size-checked before allocation.
 
 ### `cross_recurrence_plot`
 

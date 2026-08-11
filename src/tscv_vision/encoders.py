@@ -1518,6 +1518,214 @@ def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     return cast(Array, adj)
 
 
+ChirpletAggregate = Literal["max", "mean", "energy", "none"]
+
+#: Refuse to allocate a chirplet tensor larger than this, in bytes. The tensor
+#: is ``chirp_rates x frequencies x frames`` and grows quickly.
+MAX_CHIRPLET_BYTES = 512 * 1024**2
+
+
+def chirplet_transform(
+    x: Array,
+    *,
+    fs: float = 1.0,
+    frequencies: Array | None = None,
+    chirp_rates: Array | None = None,
+    window_size: int = 64,
+    hop_length: int | None = None,
+    aggregate: ChirpletAggregate = "max",
+    log_scale: bool = True,
+    max_bytes: int = MAX_CHIRPLET_BYTES,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    r"""Chirplet transform: a time-frequency image that also resolves chirp rate.
+
+    Correlates the signal against a dictionary of Gaussian-windowed *chirped*
+    atoms
+
+    .. math::
+
+        g_{t_0, f, c}(t) = w(t - t_0)\,
+        \exp\!\bigl(2\pi i \bigl[f (t - t_0) + \tfrac{c}{2}(t - t_0)^2\bigr]\bigr)
+
+    each carrying a temporal centre :math:`t_0`, a centre frequency :math:`f`,
+    a chirp rate :math:`c` in Hz/s, and complex phase. A short-time Fourier
+    transform is the special case :math:`c = 0`; sweeping :math:`c` is what
+    makes this a chirplet transform rather than an STFT with a different
+    window.
+
+    Computed by de-chirping each frame with :math:`\exp(-i\pi c\tau^2)` and
+    taking one FFT per chirp rate, which evaluates every frequency at once.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    fs:
+        Sampling frequency in Hz; positive. Chirp rates are in Hz/s.
+    frequencies:
+        Centre frequencies to evaluate. ``None`` (default) uses the FFT grid
+        ``0 .. fs/2``, which is much faster; an explicit array is evaluated
+        with a direct DFT and may be any set of frequencies.
+    chirp_rates:
+        Chirp rates in Hz/s. ``None`` uses 9 rates linearly spaced over
+        ``+/- fs^2 / (4 * window_size)``, the largest sweep a single window can
+        resolve without the instantaneous frequency leaving the band.
+    window_size:
+        Samples per frame, ``>= 4`` and ``<= N``.
+    hop_length:
+        Step between frames; defaults to ``window_size // 4``.
+    aggregate:
+        How to reduce the chirp-rate axis. ``"max"`` (default) keeps the
+        best-matching rate per time-frequency cell, the conventional chirplet
+        display. ``"mean"`` averages, ``"energy"`` takes the root sum of
+        squares, and ``"none"`` returns the full three-dimensional tensor.
+    log_scale:
+        Apply ``log1p`` after normalising, which makes weak atoms visible.
+    max_bytes:
+        Refuse to allocate a tensor larger than this. The intermediate is
+        ``len(chirp_rates) x len(frequencies) x n_frames`` float64.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(n_frequencies, n_frames)`` image normalised to ``[0, 1]``, or
+        ``(n_chirp_rates, n_frequencies, n_frames)`` when ``aggregate="none"``.
+
+    Raises
+    ------
+    ValueError
+        If any parameter is out of range, the requested tensor would exceed
+        ``max_bytes``, or ``x`` is invalid.
+
+    Notes
+    -----
+    **Complexity** ``O(C · F · W log W)`` for ``C`` chirp rates and ``F``
+    frames on the FFT grid, or ``O(C · F · W · n_frequencies)`` with explicit
+    frequencies. Memory is the tensor above, checked before allocation.
+
+    **Invariances** Equivariant to time shift by whole hops. Invariant to
+    amplitude scaling through the normalisation. Reversing the signal in time
+    negates the recovered chirp rates.
+
+    **Information lost** Phase, and any chirp rate outside the requested grid —
+    a sweep faster than the grid covers is attributed to the nearest rate, so
+    the grid is a modelling choice rather than a display setting. Aggregation
+    additionally discards *which* rate matched; use ``aggregate="none"`` to
+    keep it.
+
+    **Use cases** Signals whose frequency sweeps within a single analysis
+    window — radar and sonar chirps, machine run-ups, birdsong, gravitational
+    wave templates — where an STFT smears the sweep across bins.
+
+    References
+    ----------
+    Mann & Haykin (1995), "The chirplet transform: physical considerations",
+    IEEE Transactions on Signal Processing 43(11):2745-2761.  Baraniuk & Jones
+    (1996), "Wigner-based formulation of the chirplet transform", IEEE
+    Transactions on Signal Processing 44(12):3129-3135.
+
+    Examples
+    --------
+    >>> fs = 200.0
+    >>> t = np.arange(1024) / fs
+    >>> img = chirplet_transform(np.sin(2 * np.pi * (30 * t + 15 * t**2)), fs=fs)
+    >>> img.shape
+    (33, 61)
+    """
+
+    series = _validate_series(x, nan_policy=nan_policy)
+    if not math.isfinite(fs) or fs <= 0:
+        raise ValueError("fs must be a positive, finite sampling frequency")
+    if window_size < 4:
+        raise ValueError("window_size must be >= 4")
+    if window_size > series.size:
+        raise ValueError(
+            f"window_size={window_size} exceeds the series length {series.size}"
+        )
+    step = window_size // 4 if hop_length is None else int(hop_length)
+    if step < 1:
+        raise ValueError("hop_length must be >= 1")
+    if aggregate not in {"max", "mean", "energy", "none"}:
+        raise ValueError("aggregate must be 'max', 'mean', 'energy' or 'none'")
+
+    if chirp_rates is None:
+        limit = fs**2 / (4.0 * window_size)
+        rates = np.linspace(-limit, limit, 9)
+    else:
+        rates = np.asarray(chirp_rates, dtype=float)
+        if rates.ndim != 1 or rates.size == 0 or not np.all(np.isfinite(rates)):
+            raise ValueError("chirp_rates must be a non-empty 1D array of finite values")
+
+    use_fft_grid = frequencies is None
+    if use_fft_grid:
+        n_frequencies = window_size // 2 + 1
+    else:
+        freq_grid = np.asarray(frequencies, dtype=float)
+        if freq_grid.ndim != 1 or freq_grid.size == 0 or not np.all(np.isfinite(freq_grid)):
+            raise ValueError("frequencies must be a non-empty 1D array of finite values")
+        n_frequencies = freq_grid.size
+
+    n_frames = 1 + (series.size - window_size) // step
+    needed = rates.size * n_frequencies * n_frames * 8
+    if needed > max_bytes:
+        raise ValueError(
+            f"the chirplet tensor would need {needed / 1024**2:.1f} MiB "
+            f"({rates.size} chirp rates x {n_frequencies} frequencies x "
+            f"{n_frames} frames), above max_bytes="
+            f"{max_bytes / 1024**2:.1f} MiB; reduce the grids, raise the hop, "
+            "or raise max_bytes deliberately"
+        )
+
+    frames = np.lib.stride_tricks.as_strided(
+        series,
+        shape=(n_frames, window_size),
+        strides=(series.strides[0] * step, series.strides[0]),
+        writeable=False,
+    )
+    window = np.hanning(window_size)
+    # Time relative to the centre of the atom, so the chirp is symmetric.
+    tau = (np.arange(window_size) - (window_size - 1) / 2.0) / fs
+
+    tensor = np.empty((rates.size, n_frequencies, n_frames), dtype=float)
+    for index, rate in enumerate(rates):
+        dechirped = frames * window * np.exp(-1j * np.pi * rate * tau**2)
+        if use_fft_grid:
+            # The de-chirped frame is complex, so its spectrum is not
+            # conjugate-symmetric; take the full FFT and keep 0 .. fs/2.
+            spectrum = np.fft.fft(dechirped, axis=1)[:, :n_frequencies]
+        else:
+            basis = np.exp(-2j * np.pi * np.outer(freq_grid, tau))
+            spectrum = dechirped @ basis.T
+        tensor[index] = np.abs(spectrum).T
+
+    if aggregate == "none":
+        return _normalise_image(tensor, log_scale)
+    if aggregate == "max":
+        reduced = tensor.max(axis=0)
+    elif aggregate == "mean":
+        reduced = tensor.mean(axis=0)
+    else:
+        reduced = np.sqrt(np.sum(tensor**2, axis=0))
+    return _normalise_image(reduced, log_scale)
+
+
+def _normalise_image(values: Array, log_scale: bool) -> Array:
+    """Scale to ``[0, 1]``, optionally compressing the dynamic range first."""
+
+    peak = float(values.max())
+    if peak <= 0:
+        empty: Array = np.zeros_like(values)
+        return empty
+    scaled: Array = values / peak
+    if log_scale:
+        scaled = np.log1p(scaled)
+        scaled = scaled / (scaled.max() + 1e-300)
+    return scaled
+
+
 SpectralScaling = Literal["power", "log_power"]
 
 
@@ -2467,6 +2675,7 @@ register_encoder("gadf", lambda x: gaf(x, method="difference"))
 register_encoder("rp", recurrence_plot)
 register_encoder("spec", spectrogram)
 register_encoder("mtspec", multitaper_spectrogram)
+register_encoder("chirplet", chirplet_transform)
 register_encoder("cwt", cwt)
 register_encoder("sst", synchrosqueezed_cwt)
 register_encoder("ph", persistence_image)
@@ -2525,6 +2734,9 @@ __all__ = [
     "cwt",
     "multitaper_spectrogram",
     "SpectralScaling",
+    "chirplet_transform",
+    "ChirpletAggregate",
+    "MAX_CHIRPLET_BYTES",
     "synchrosqueezed_cwt",
     "SSTWavelet",
     "persistence_diagram",

@@ -14,6 +14,16 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`encoders.chirplet_transform`** (registry key `chirplet`) — correlates
+  the signal against Gaussian-windowed chirped atoms, resolving chirp rate as
+  well as time and frequency. Computed by de-chirping each frame and taking
+  one FFT per rate. Validated by recovering known sweep rates to within one
+  grid step for rates from -60 to +60 Hz/s, by separating crossing chirps into
+  their two rates, and by time reversal negating the recovered rate. The
+  `chirp_rate=0` slice is asserted to equal a windowed Fourier transform
+  exactly, which is what distinguishes the encoder from an STFT with a
+  different window. The `(rates, frequencies, frames)` tensor is size-checked
+  against `max_bytes` before allocation.
 - **`tscv_vision.scattering`** (registry key `scat`) — wavelet scattering via
   Kymatio, added as a thin validated layer rather than a reimplementation.
   Contributes input validation, deterministic coefficient ordering, three

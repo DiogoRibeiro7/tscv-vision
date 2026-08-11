@@ -150,6 +150,7 @@ Every encoder accepts a `nan_policy` and is reachable by registry name through
 | Recurrence plot | `encoders.recurrence_plot(x)` or `rp` | `(N, N)` |
 | Spectrogram | `encoders.spectrogram(x)` or `spec` | `(F, T)` |
 | Multitaper spectrogram | `encoders.multitaper_spectrogram(x)` or `mtspec` | `(F, T)` |
+| Chirplet transform | `encoders.chirplet_transform(x)` or `chirplet` | `(F, T)` |
 | Continuous wavelet | `encoders.cwt(x, scales)` or `cwt` | `(scales, N)` |
 | Synchrosqueezed CWT | `encoders.synchrosqueezed_cwt(x, fs=...)` or `sst` | `(frequencies, N)` |
 | Markov Transition Field | `encoders.mtf(x)` or `mtf` | `(N, N)` |

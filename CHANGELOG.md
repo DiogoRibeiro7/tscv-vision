@@ -14,6 +14,16 @@
   ridge of a constant sinusoid and of a linear chirp sit within one frequency
   bin of the analytic law, and energy is at least 5x more concentrated than
   the plain `cwt` it is built on.
+- **`encoders.ordinal_transition_field`** (registry key `otf`) — a
+  TSCV-Vision representation, labelled as such: it composes Bandt-Pompe
+  ordinal patterns with an ordinal transition network, laid out as a field in
+  the manner of the MTF. The ingredients are published; this composition is
+  not, so it is not marked canonical. Patterns are labelled by exact Lehmer
+  codes rather than float hashes, unobserved states get zero rows instead of an
+  invented uniform distribution, and the factorial state space is capped at
+  order 7. Validated against the published forbidden-pattern result: the
+  logistic map at r=4 admits exactly five of the six order-3 patterns while
+  i.i.d. noise admits all six.
 - **`encoders.horizontal_visibility_graph`** (registry key `hvg`) — the
   horizontal visibility criterion, distinct from the natural visibility graph
   already provided by `visibility_graph`. Edges are found in `O(N)` with a

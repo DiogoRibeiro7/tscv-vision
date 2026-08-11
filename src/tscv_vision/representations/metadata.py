@@ -189,6 +189,7 @@ _PROP = "tests/test_encoder_properties.py"
 _REG = "tests/test_regression_outputs.py"
 _SST = "tests/test_synchrosqueezed.py"
 _HVG = "tests/test_horizontal_visibility.py"
+_OTF = "tests/test_ordinal_transition.py"
 
 
 def _info(**kwargs: Any) -> RepresentationInfo:
@@ -316,6 +317,33 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
         complexity="O(N^2) time and memory",
         validation_level=ValidationLevel.REFERENCE,
         validated_by=(f"{_REF}::test_mtf_matches_pyts", f"{_DEF}::test_mtf_matches_definition"),
+    ),
+    "otf": _info(
+        name="otf",
+        family="symbolic",
+        input_kind="univariate",
+        output_kind="square_image",
+        canonical_method=False,
+        reference=(
+            "Bandt & Pompe (2002), Permutation entropy, PRL 88:174102 "
+            "(ordinal encoding); Small (2013) and McCullough et al. (2015) "
+            "(ordinal transition networks)"
+        ),
+        complexity="O(N * m log m) time, O(W^2) memory; state space is m!",
+        validation_level=ValidationLevel.SYNTHETIC,
+        validated_by=(
+            f"{_OTF}::test_logistic_map_has_forbidden_patterns_and_noise_does_not",
+            f"{_OTF}::test_lehmer_codes_are_a_bijection_onto_the_state_space",
+            f"{_OTF}::test_transition_matrix_counts_match_a_direct_tally",
+            f"{_OTF}::test_invariant_under_monotonic_transformation",
+        ),
+        notes=(
+            "TSCV-Vision representation. Composes Bandt-Pompe ordinal patterns "
+            "with an ordinal transition network, laid out as a field in the "
+            "manner of the MTF. The ingredients are published; this exact "
+            "composition is not, so it is not marked canonical. Uses only the "
+            "ordering of values, so all amplitude information is discarded."
+        ),
     ),
     "ph": _info(
         name="ph",

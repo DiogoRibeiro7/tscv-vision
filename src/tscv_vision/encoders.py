@@ -1518,6 +1518,247 @@ def visibility_graph(x: Array, *, nan_policy: NanPolicy = "raise") -> Array:
     return cast(Array, adj)
 
 
+#: Largest embedding order accepted by :func:`ordinal_transition_field`.
+#: The state space is ``order!``, so the dense transition matrix grows as
+#: ``(order!)^2``: order 7 already needs ~203 MB. Bandt & Pompe recommend
+#: ``3 <= order <= 7`` on statistical grounds too — larger orders leave too few
+#: windows to estimate transitions from.
+MAX_ORDINAL_ORDER = 7
+
+TiePolicy = Literal["stable", "raise", "jitter"]
+OrdinalMode = Literal["transition_matrix", "field"]
+
+
+def _ordinal_patterns(
+    x: Array, order: int, delay: int, tie_policy: TiePolicy, seed: int
+) -> NDArray[np.int64]:
+    """Return the Lehmer code of each embedded window's ordinal pattern.
+
+    The Lehmer code is a bijection from permutations of ``order`` elements onto
+    ``0 .. order! - 1``, so patterns are labelled by exact integers rather than
+    by hashing floats.
+    """
+
+    span = (order - 1) * delay
+    n_windows = x.size - span
+    embedded = np.empty((n_windows, order), dtype=float)
+    for k in range(order):
+        start = k * delay
+        embedded[:, k] = x[start : start + n_windows]
+
+    if tie_policy == "raise":
+        if np.any(np.diff(np.sort(embedded, axis=1), axis=1) == 0):
+            raise ValueError(
+                "tied values inside an embedded window make the ordinal pattern "
+                "ambiguous; use tie_policy='stable' or 'jitter'"
+            )
+    elif tie_policy == "jitter":
+        # Deterministic given `seed`: ties are broken at random rather than
+        # systematically in favour of earlier positions, which biases the
+        # pattern distribution on quantised or repetitive data.
+        rng = np.random.default_rng(seed)
+        scale = float(np.max(np.abs(embedded))) or 1.0
+        embedded = embedded + rng.uniform(-1e-9, 1e-9, size=embedded.shape) * scale
+
+    # A stable argsort breaks remaining ties by position, which is the
+    # conventional Bandt-Pompe choice.
+    permutation = np.argsort(embedded, axis=1, kind="stable")
+
+    factorials = np.array(
+        [math.factorial(order - 1 - i) for i in range(order)], dtype=np.int64
+    )
+    codes = np.zeros(n_windows, dtype=np.int64)
+    for i in range(order):
+        later = permutation[:, i + 1 :]
+        smaller = np.sum(later < permutation[:, i : i + 1], axis=1)
+        codes += smaller.astype(np.int64) * factorials[i]
+    return codes
+
+
+def _block_mean(image: Array, size: int) -> Array:
+    """Deterministically downsample a square image to ``size`` by block means."""
+
+    n = image.shape[0]
+    edges = np.linspace(0, n, size + 1).round().astype(int)
+    out = np.empty((size, size), dtype=float)
+    for i in range(size):
+        rows = image[edges[i] : max(edges[i] + 1, edges[i + 1])]
+        for j in range(size):
+            out[i, j] = rows[:, edges[j] : max(edges[j] + 1, edges[j + 1])].mean()
+    return out
+
+
+def ordinal_transition_field(
+    x: Array,
+    *,
+    order: int = 3,
+    delay: int = 1,
+    image_size: int | None = None,
+    tie_policy: TiePolicy = "stable",
+    mode: OrdinalMode = "field",
+    seed: int = 0,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    r"""Ordinal Pattern Transition Field — a TSCV-Vision representation.
+
+    .. note::
+       This is a **TSCV-Vision representation**, not a previously published
+       image algorithm. It composes two established ingredients — Bandt &
+       Pompe ordinal patterns (2002) and ordinal-pattern transition networks
+       (Small, 2013; McCullough et al., 2015) — into a field laid out like the
+       Markov Transition Field of Wang & Oates (2015). The composition is ours;
+       no source describes this exact construction.
+
+    Three stages:
+
+    1. **Ordinal encoding.** Each embedded window
+       :math:`(x_t, x_{t+\tau}, \dots, x_{t+(m-1)\tau})` is replaced by the
+       permutation that sorts it, labelled by its Lehmer code in
+       :math:`0 \dots m!-1`.
+    2. **Transition matrix.**
+       :math:`P[a,b] = \frac{\#\{t : s_t = a,\, s_{t+1} = b\}}{\#\{t : s_t = a\}}`,
+       so every observed row sums to 1. Rows for states that never occur are
+       all zero — the conditional distribution is undefined there, and a
+       uniform row would invent structure.
+    3. **Field.** :math:`F[i,j] = P[s_i, s_j]`, one pixel per pair of time
+       steps, in the manner of the MTF.
+
+    Parameters
+    ----------
+    x:
+        Input 1D series ``(N,)``.
+    order:
+        Embedding dimension :math:`m`, in ``[2, 7]``; see
+        :data:`MAX_ORDINAL_ORDER`.
+    delay:
+        Embedding delay :math:`\tau >= 1`.
+    image_size:
+        Downsample the field to ``(image_size, image_size)`` by block means.
+        ``None`` keeps one pixel per window pair. Ignored when ``mode`` is
+        ``"transition_matrix"``.
+    tie_policy:
+        What to do when a window contains equal values, which leaves the
+        pattern ambiguous. ``"stable"`` (default) breaks ties by position, the
+        conventional choice. ``"raise"`` refuses. ``"jitter"`` breaks them at
+        random, deterministically given ``seed``, which avoids the systematic
+        bias toward earlier positions that ``"stable"`` introduces on
+        quantised data.
+    mode:
+        ``"field"`` returns the time-indexed field, ``"transition_matrix"``
+        the raw ``(m!, m!)`` matrix.
+    seed:
+        Seed for ``tie_policy="jitter"``; ignored otherwise. Present so that
+        jittered output is still reproducible.
+    nan_policy:
+        How to treat NaNs, see :func:`_validate_series`.
+
+    Returns
+    -------
+    ndarray
+        ``(W, W)`` field for ``W = N - (order - 1) * delay`` windows, or
+        ``(image_size, image_size)`` if downsampled, or ``(m!, m!)`` in
+        ``"transition_matrix"`` mode. All values are probabilities in
+        ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``order`` is outside ``[2, 7]``, ``delay < 1``, ``image_size`` is
+        not positive or exceeds the field, the series is too short for two
+        windows, ``tie_policy="raise"`` and ties exist, or ``x`` is invalid.
+
+    Notes
+    -----
+    **Complexity** ``O(N · m log m)`` to encode, ``O(N)`` to accumulate
+    transitions, ``O(W^2)`` memory for the field. The *state space* is
+    factorial in ``order``, so the dense transition matrix costs
+    ``(m!)^2``: 36 entries at ``m=3``, 518 400 at ``m=6``, 25.4 million
+    (~203 MB) at ``m=7``.
+
+    **Invariances** Invariant under any strictly increasing transformation of
+    the values, because only their order is used — the property tested
+    explicitly below. Not invariant to time reversal or to reordering.
+
+    **Information lost** All amplitude information: only the ranking within
+    each window survives. Series with identical ordinal dynamics and wildly
+    different magnitudes give the same field. Windows shorter than ``order``
+    at the tail are dropped.
+
+    **Use cases** Regime and dynamics discrimination where amplitude is
+    unreliable or uncalibrated — the ordinal view is robust to monotonic
+    sensor drift and to unknown gain.
+
+    References
+    ----------
+    Bandt & Pompe (2002), "Permutation entropy: a natural complexity measure
+    for time series", Physical Review Letters 88:174102.  Small (2013),
+    "Complex networks from time series: capturing dynamics", ISCAS.
+    McCullough, Small, Stemler & Iu (2015), "Time lagged ordinal partition
+    networks for capturing dynamics of continuous dynamical systems", Chaos
+    25:053101.
+
+    Examples
+    --------
+    >>> field = ordinal_transition_field(np.sin(np.linspace(0, 12.0, 64)))
+    >>> field.shape
+    (62, 62)
+    >>> bool(np.all((field >= 0) & (field <= 1)))
+    True
+    """
+
+    series = _validate_series(x, nan_policy=nan_policy)
+    if order < 2 or order > MAX_ORDINAL_ORDER:
+        raise ValueError(
+            f"order must be in [2, {MAX_ORDINAL_ORDER}]; the state space is "
+            f"order! and the dense transition matrix (order!)^2, which is "
+            f"already ~203 MB at order {MAX_ORDINAL_ORDER}"
+        )
+    if delay < 1:
+        raise ValueError("delay must be >= 1")
+    if tie_policy not in {"stable", "raise", "jitter"}:
+        raise ValueError("tie_policy must be 'stable', 'raise' or 'jitter'")
+    if mode not in {"transition_matrix", "field"}:
+        raise ValueError("mode must be 'transition_matrix' or 'field'")
+
+    span = (order - 1) * delay
+    n_windows = series.size - span
+    if n_windows < 2:
+        raise ValueError(
+            f"series of length {series.size} yields {max(n_windows, 0)} windows "
+            f"at order={order}, delay={delay}; at least 2 are needed to observe "
+            "a transition"
+        )
+
+    codes = _ordinal_patterns(series, order, delay, tie_policy, seed)
+    n_states = math.factorial(order)
+
+    # Accumulate transitions over the observed states only, so memory follows
+    # the data rather than the factorial state space.
+    observed, inverse = np.unique(codes, return_inverse=True)
+    counts = np.zeros((observed.size, observed.size), dtype=float)
+    np.add.at(counts, (inverse[:-1], inverse[1:]), 1.0)
+    row_totals = counts.sum(axis=1, keepdims=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        probabilities = np.where(row_totals > 0, counts / row_totals, 0.0)
+
+    if mode == "transition_matrix":
+        full = np.zeros((n_states, n_states), dtype=float)
+        full[np.ix_(observed, observed)] = probabilities
+        return cast(Array, full)
+
+    field = probabilities[np.ix_(inverse, inverse)]
+    if image_size is not None:
+        if image_size < 1:
+            raise ValueError("image_size must be positive")
+        if image_size > n_windows:
+            raise ValueError(
+                f"image_size={image_size} exceeds the {n_windows}x{n_windows} "
+                "field; upsampling would invent detail"
+            )
+        field = _block_mean(field, image_size)
+    return cast(Array, field)
+
+
 HVGWeight = Literal["binary", "amplitude", "distance"]
 
 
@@ -1878,6 +2119,7 @@ register_encoder("sst", synchrosqueezed_cwt)
 register_encoder("ph", persistence_image)
 register_encoder("eph", extrema_persistence_histogram)
 register_encoder("mtf", mtf)
+register_encoder("otf", ordinal_transition_field)
 register_encoder("gdf", gdf)
 register_encoder("msrp", multi_scale_rp)
 register_encoder("dtw", dtw_matrix)
@@ -1918,6 +2160,10 @@ __all__ = [
     "persistence_image",
     "extrema_persistence_histogram",
     "mtf",
+    "ordinal_transition_field",
+    "MAX_ORDINAL_ORDER",
+    "TiePolicy",
+    "OrdinalMode",
     "gdf",
     "multi_scale_rp",
     "multi_scale_conv",

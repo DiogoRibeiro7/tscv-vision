@@ -5,10 +5,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](pyproject.toml)
 
-`tscv-vision` is a NumPy-first Python package for computer-vision feature
-engineering of one-dimensional time series. It converts signals into image
-representations, extracts classical image descriptors, and scales the workflow
-to long signals with sliding-window processing.
+`tscv-vision` is a framework for constructing, learning, combining, and
+evaluating structured representations of time-series data. It includes
+NumPy-first image encoders, classical feature descriptors, representation
+metadata, fusion utilities, leakage-safe evaluation, and sliding-window
+processing for long signals.
 
 The project is designed for research, reproducible feature extraction, and
 lightweight production pipelines where the core dependency footprint should
@@ -264,6 +265,24 @@ fold. scikit-learn is not required to use them.
 
 See [docs/encoder_validation.md](docs/encoder_validation.md) for the per-encoder
 matrix, generated from the metadata.
+
+### Representation analysis
+
+`tscv_vision.analysis` includes NumPy-only tools for comparing representation
+spaces before combining them. Start with linear CKA:
+
+```python
+from tscv_vision.analysis import representation_similarity
+
+similarity = representation_similarity({
+    "gaf": Z_gaf,
+    "cwt": Z_cwt,
+    "rp": Z_rp,
+})
+```
+
+The same module reports mean redundancy, pairwise fusion gains over the best
+single representation, and entropy-based effective rank for collapse checks.
 
 ## Scientific Naming Policy
 

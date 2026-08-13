@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from tscv_vision import features
 
@@ -84,6 +85,53 @@ def test_lbp_variants() -> None:
     uni = features.lbp_uniform(img)
     assert ri.shape == (256,)
     assert uni.shape[0] == features._LBP_UNI_BINS  # type: ignore[attr-defined]
+
+
+def test_extract_feature_vector_reuses_lbp_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    img = np.arange(64, dtype=float).reshape(8, 8)
+    selected = ["lbp", "lbp_ri", "lbp_uniform"]
+    expected = np.concatenate([features.lbp(img), features.lbp_ri(img), features.lbp_uniform(img)])
+    original = features._lbp_codes  # type: ignore[attr-defined]
+    calls = 0
+
+    def counted_lbp_codes(
+        image: np.ndarray, radius: int, points: int = features._LBP_POINTS  # type: ignore[attr-defined]
+    ) -> np.ndarray:
+        nonlocal calls
+        calls += 1
+        return original(image, radius, points)
+
+    monkeypatch.setattr(features, "_lbp_codes", counted_lbp_codes)
+    got = features.extract_feature_vector(img, selected=selected)
+    np.testing.assert_allclose(got, expected)
+    assert calls == 1
+
+
+def test_extract_feature_vector_reuses_gradient_components(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    img = np.arange(64, dtype=float).reshape(8, 8)
+    selected = ["gradient", "edge_density", "orientation", "contour"]
+    expected = np.concatenate(
+        [
+            features.gradient_histogram(img, bins=16),
+            features.edge_density(img),
+            features.orientation_histogram(img, bins=32),
+            features.contour_ratio(img),
+        ]
+    )
+    original = features._conv2  # type: ignore[attr-defined]
+    calls = 0
+
+    def counted_conv2(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+        nonlocal calls
+        calls += 1
+        return original(image, kernel)
+
+    monkeypatch.setattr(features, "_conv2", counted_conv2)
+    got = features.extract_feature_vector(img, selected=selected)
+    np.testing.assert_allclose(got, expected)
+    assert calls == 2
 
 
 def test_gabor_and_fft_features() -> None:

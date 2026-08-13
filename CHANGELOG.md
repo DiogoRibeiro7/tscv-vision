@@ -2,8 +2,23 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-13
+
+Representation expansion release. This release adds validated time-frequency,
+graph, nonlinear-dynamics, multivariate, and representation-analysis surfaces
+while keeping heavyweight scientific backends behind optional extras.
+
 ### Added
 
+- `analysis.representation_alignment`, `representation_similarity`,
+  `representation_redundancy`, `representation_complementarity`, and
+  `representation_effective_rank` — NumPy-only representation agreement tools
+  starting with linear CKA, pairwise similarity matrices, mean redundancy,
+  fusion gains over the best constituent representation, and collapse checks.
+- `benchmarks/encoders/run_encoder_suite.py` and `tests/reference/` — committed
+  scaffolding for encoder diagnostics and reference-validation tests. The
+  benchmark script records runtime, peak memory, sparsity, concentration, and
+  horizontal-visibility scaling without raising any encoder to `LEVEL 4`.
 - **`encoders.synchrosqueezed_cwt`** (registry key `sst`) — synchrosqueezed
   continuous wavelet transform. Energy is reassigned along the frequency axis
   to the instantaneous frequency estimated from the phase derivative, computed

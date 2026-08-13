@@ -50,6 +50,7 @@ setup(
     license_files=["LICENSE"],
     packages=find_packages("src"),
     package_dir={"": "src"},
+    package_data={"tscv_vision": ["py.typed"]},
     python_requires=">=3.10,<3.13",
     install_requires=["numpy>=1.24"],
     # Keep in sync with [tool.poetry.extras] in pyproject.toml;

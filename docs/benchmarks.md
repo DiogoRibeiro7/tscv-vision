@@ -12,10 +12,10 @@ checked rather than asserted.
   `representation + classifier` pair — nothing is tuned on the data being
   scored. If you need to tune, do it with
   `AdaptivePipeline.nested_score` or on the training split alone.
-- **Frozen raw output.** Every `(dataset, method, seed)` row is written to
-  `results.csv`, including failures. `manifest.json` records the Python and OS
-  versions, the version of every package that can change a number, and the git
-  commit (flagged if the tree was dirty).
+- **Frozen raw output.** Every `(dataset, method, seed)` row is appended to
+  `results.csv` as soon as it completes, including failures. `manifest.json`
+  records the Python and OS versions, the version of every package that can
+  change a number, and the git commit (flagged if the tree was dirty).
 - **Honest statistics.** Comparison uses Demšar-style non-parametric checks: a
   Friedman test over the complete block of datasets, average ranks, the Nemenyi
   critical difference, and Holm-corrected pairwise Wilcoxon signed-rank tests.
@@ -53,6 +53,7 @@ python -m tscv_vision.evaluation \
     --archive /data/UCRArchive_2018 \
     --datasets Adiac Beef Coffee ECG200 GunPoint \
     --seeds 0 1 2 \
+    --n-jobs 4 \
     --out results/ucr-subset
 
 # A file with one dataset name per line ('#' comments allowed).
@@ -70,6 +71,14 @@ Outputs land in `--out`:
 | `results.csv` | One row per `(dataset, method, seed)`: accuracy, feature count, encode/fit/predict seconds, peak MiB, dataset shape, error text |
 | `manifest.json` | Environment, package versions, git commit, methods, seeds |
 | `summary.md` | Rank table, Friedman result, critical difference, pairwise tests |
+
+`run_benchmark()` and the CLI resume by default when `results.csv` already
+exists. Rows whose `(dataset, method, seed)` key is already present are reused,
+missing rows are appended, and stale rows outside the requested grid are
+dropped when the file is normalized at startup. Pass `--no-resume` to recompute
+from scratch. `--n-jobs` parallelizes independent combinations across worker
+processes; keep it below the number of physical cores if the classifier or BLAS
+library also uses threads.
 
 ## Default methods
 
@@ -151,7 +160,7 @@ that.
 
 1. check out the recorded `git_commit` (and confirm `git_dirty` is `false`);
 2. install the recorded package versions;
-3. rerun with the same `--datasets`, `--seeds` and `--out`;
+3. rerun with the same `--datasets`, `--seeds`, `--n-jobs` and `--out`;
 4. diff the new `results.csv` against the frozen one.
 
 Classifier seeds are threaded through, so the deterministic methods reproduce

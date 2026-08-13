@@ -125,6 +125,63 @@ def test_run_benchmark_freezes_raw_outputs(tmp_path: Path) -> None:
     assert "python" in manifest and "git_commit" in manifest
 
 
+def test_run_benchmark_resumes_partial_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    datasets = [_tiny_dataset("A", seed=0), _tiny_dataset("B", seed=1)]
+    methods = (
+        evaluation.Method("m1", "raw", "knn1"),
+        evaluation.Method("m2", "raw", "knn1"),
+    )
+    calls: list[tuple[str, str, int]] = []
+
+    def fake_evaluate(
+        dataset: evaluation.TSDataset, method: evaluation.Method, *, seed: int = 0
+    ) -> evaluation.EvaluationResult:
+        calls.append((dataset.name, method.name, seed))
+        return evaluation.EvaluationResult(
+            dataset=dataset.name,
+            method=method.name,
+            representation=method.representation,
+            classifier=method.classifier,
+            seed=seed,
+            accuracy=1.0 if method.name == "m1" else 0.5,
+            n_features=dataset.length,
+            encode_seconds=0.0,
+            fit_seconds=0.0,
+            predict_seconds=0.0,
+            peak_mib=0.0,
+            n_train=dataset.X_train.shape[0],
+            n_test=dataset.X_test.shape[0],
+            length=dataset.length,
+            n_classes=dataset.n_classes,
+        )
+
+    monkeypatch.setattr(evaluation, "evaluate", fake_evaluate)
+    out_dir = tmp_path / "run"
+    first = evaluation.run_benchmark(datasets, methods[:1], seeds=(0, 1), out_dir=out_dir)
+    assert len(first) == 4
+    assert len(calls) == 4
+
+    calls.clear()
+    second = evaluation.run_benchmark(datasets, methods, seeds=(0, 1), out_dir=out_dir)
+    assert len(second) == 8
+    assert calls == [
+        ("A", "m2", 0),
+        ("A", "m2", 1),
+        ("B", "m2", 0),
+        ("B", "m2", 1),
+    ]
+
+    rows = evaluation.read_results(out_dir / "results.csv")
+    keys = [(row.dataset, row.method, row.seed) for row in rows]
+    assert len(keys) == len(set(keys)) == 8
+    manifest = json.loads((out_dir / "manifest.json").read_text())
+    assert manifest["n_rows"] == 8
+    assert manifest["planned_rows"] == 8
+    assert manifest["resume"] is True
+
+
 def test_accuracy_matrix_averages_seeds_and_drops_incomplete() -> None:
     def result(dataset: str, method: str, seed: int, acc: float) -> evaluation.EvaluationResult:
         return evaluation.EvaluationResult(

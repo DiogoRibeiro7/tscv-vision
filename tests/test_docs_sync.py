@@ -277,6 +277,16 @@ def test_extras_match_between_pyproject_and_setup_py() -> None:
         )
 
 
+def test_pep561_marker_is_packaged() -> None:
+    """Strict internal typing should be visible to downstream type checkers."""
+
+    assert (REPO / "src" / "tscv_vision" / "py.typed").is_file()
+    manifest = (REPO / "MANIFEST.in").read_text(encoding="utf-8")
+    setup_py = (REPO / "setup.py").read_text(encoding="utf-8")
+    assert "src/tscv_vision/py.typed" in manifest
+    assert '"tscv_vision": ["py.typed"]' in setup_py
+
+
 def test_every_optional_import_has_an_extra() -> None:
     """Optional third-party imports must have a documented install route."""
 

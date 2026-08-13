@@ -129,6 +129,20 @@ which is recorded per dataset. Report these alongside accuracy — a
 representation that wins by 1% at 50× the cost is a different claim from one
 that wins outright.
 
+## Encoder diagnostics
+
+For local encoder profiling without a dataset archive, run:
+
+```bash
+python benchmarks/encoders/run_encoder_suite.py --smoke --out results/encoder-smoke.json
+```
+
+The script records time-frequency concentration metrics for the STFT, CWT and
+synchrosqueezed CWT, plus horizontal-visibility graph scaling rows. These
+diagnostics are useful for regressions and profiling, but they do not raise an
+encoder to `LEVEL 4`; only committed dataset-scale benchmark results can do
+that.
+
 ## Reproducing a published run
 
 `manifest.json` pins everything needed. To reproduce:

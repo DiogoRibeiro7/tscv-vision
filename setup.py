@@ -34,8 +34,8 @@ long_description = (ROOT / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="tscv-vision",
-    version="0.2.0",
-    description="Computer-vision feature engineering for 1D time series (NumPy-first).",
+    version="0.3.0",
+    description="Structured representation engineering for time series (NumPy-first).",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Diogo Ribeiro",

@@ -1,18 +1,18 @@
 cff-version: 1.2.0
 message: "If you use tscv-vision in academic work, please cite the archived Zenodo release or this software record."
 type: software
-title: "tscv-vision: Computer-vision feature engineering for 1D time series"
+title: "tscv-vision: Structured representation engineering for time series"
 authors:
   - family-names: Ribeiro
     given-names: Diogo
     affiliation: "School of Media Arts and Design, Polytechnic of Porto, Portugal"
     orcid: "https://orcid.org/0009-0001-2022-7072"
-abstract: "A NumPy-first Python package for converting one-dimensional time series into image representations and extracting classical computer-vision features."
+abstract: "A NumPy-first framework for constructing, combining, analyzing, and evaluating structured representations of time-series data."
 repository-code: "https://github.com/DiogoRibeiro7/tscv-vision"
 url: "https://github.com/DiogoRibeiro7/tscv-vision"
 license: MIT
-version: "0.1.1"
-date-released: "2026-08-10"
+version: "0.3.0"
+date-released: "2026-08-13"
 keywords:
   - time series
   - computer vision

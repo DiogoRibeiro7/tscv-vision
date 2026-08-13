@@ -429,7 +429,7 @@ datasets. See [benchmarks.md](benchmarks.md).
 - `load_ucr_tsv(archive, name)` / `list_ucr_datasets(archive)`
 - `Method(name, representation, classifier='knn1', bins=16, features=None)`
 - `evaluate(dataset, method, *, seed=0) -> EvaluationResult`
-- `run_benchmark(datasets, methods=None, *, seeds=(0,), out_dir=None)`
+- `run_benchmark(datasets, methods=None, *, seeds=(0,), out_dir=None, resume=True, n_jobs=1)`
 - `compare_methods(results, *, alpha=0.05) -> Comparison`
 - `summary_markdown(comparison) -> str`
 

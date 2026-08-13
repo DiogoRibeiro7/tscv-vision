@@ -220,7 +220,9 @@ Wilcoxon tests.
 python -m tscv_vision.evaluation --archive /data/UCRArchive_2018 --out results/ucr
 ```
 
-The archive is not redistributable and is not vendored here. See
+The harness appends each completed row, resumes existing `results.csv` files by
+default, and accepts `--n-jobs` for independent dataset/method/seed
+combinations. The archive is not redistributable and is not vendored here. See
 [docs/benchmarks.md](docs/benchmarks.md).
 
 For model selection, prefer the nested-CV entry points — they re-run the whole

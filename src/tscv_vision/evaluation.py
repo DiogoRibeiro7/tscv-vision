@@ -35,6 +35,7 @@ import subprocess
 import time
 import tracemalloc
 from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -454,6 +455,95 @@ def environment_manifest(extra: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 _RESULT_FIELDS = tuple(EvaluationResult.__dataclass_fields__)
+_INT_RESULT_FIELDS = {"seed", "n_features", "n_train", "n_test", "length", "n_classes"}
+_FLOAT_RESULT_FIELDS = {
+    "accuracy",
+    "encode_seconds",
+    "fit_seconds",
+    "predict_seconds",
+    "peak_mib",
+}
+
+
+def _result_key(result: EvaluationResult) -> tuple[str, str, int]:
+    return result.dataset, result.method, result.seed
+
+
+def _job_key(dataset: TSDataset, method: Method, seed: int) -> tuple[str, str, int]:
+    return dataset.name, method.name, seed
+
+
+def _result_from_row(row: dict[str, str]) -> EvaluationResult:
+    values: dict[str, Any] = dict(row)
+    for field_name in _INT_RESULT_FIELDS:
+        values[field_name] = int(values[field_name])
+    for field_name in _FLOAT_RESULT_FIELDS:
+        values[field_name] = float(values[field_name])
+    return EvaluationResult(**values)
+
+
+def read_results(path: str | Path) -> list[EvaluationResult]:
+    """Read a benchmark ``results.csv`` file.
+
+    Parameters
+    ----------
+    path:
+        CSV path previously written by :func:`write_results` or
+        :func:`run_benchmark`.
+
+    Returns
+    -------
+    list[EvaluationResult]
+        Parsed rows in file order.
+    """
+
+    csv_path = Path(path)
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        return [_result_from_row(row) for row in csv.DictReader(handle)]
+
+
+def _write_results_csv(results: Sequence[EvaluationResult], csv_path: Path) -> None:
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(_RESULT_FIELDS))
+        writer.writeheader()
+        for result in results:
+            writer.writerow(asdict(result))
+
+
+def _append_result(csv_path: Path, result: EvaluationResult) -> None:
+    with csv_path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(_RESULT_FIELDS))
+        writer.writerow(asdict(result))
+
+
+def _write_manifest(
+    out_dir: Path,
+    *,
+    methods: Sequence[Method] | None,
+    datasets: Sequence[TSDataset] | None,
+    seeds: Sequence[int] | None,
+    n_rows: int,
+    planned_rows: int | None = None,
+    n_jobs: int = 1,
+    resume: bool = False,
+) -> None:
+    manifest = environment_manifest(
+        {
+            "methods": [asdict(m) for m in methods] if methods else None,
+            "datasets": [d.name for d in datasets] if datasets else None,
+            "seeds": list(seeds) if seeds else None,
+            "n_rows": n_rows,
+            "planned_rows": planned_rows,
+            "n_jobs": n_jobs,
+            "resume": resume,
+        }
+    )
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
+def _evaluate_job(job: tuple[TSDataset, Method, int]) -> EvaluationResult:
+    dataset, method, seed = job
+    return evaluate(dataset, method, seed=seed)
 
 
 def run_benchmark(
@@ -462,6 +552,8 @@ def run_benchmark(
     *,
     seeds: Sequence[int] = (0,),
     out_dir: str | Path | None = None,
+    resume: bool = True,
+    n_jobs: int = 1,
 ) -> list[EvaluationResult]:
     """Evaluate every ``(dataset, method, seed)`` combination.
 
@@ -476,8 +568,16 @@ def run_benchmark(
         Seeds for the classifiers; repeated seeds quantify run-to-run variance
         for the non-deterministic ones.
     out_dir:
-        If given, ``results.csv`` and ``manifest.json`` are written there. The
-        CSV is the frozen raw output — every row, including failures.
+        If given, ``results.csv`` and ``manifest.json`` are written there. Rows
+        are flushed incrementally as each combination completes.
+    resume:
+        If ``True`` and ``out_dir/results.csv`` already exists, completed rows
+        matching the requested ``(dataset, method, seed)`` grid are reused and
+        only missing rows are evaluated. Use ``False`` to recompute from
+        scratch.
+    n_jobs:
+        Number of worker processes for independent combinations. ``1`` runs
+        serially.
 
     Returns
     -------
@@ -485,16 +585,73 @@ def run_benchmark(
         One entry per combination, in a deterministic order.
     """
 
+    if n_jobs < 1:
+        raise ValueError("n_jobs must be >= 1")
     if methods is None:
         methods = DEFAULT_METHODS
-    results: list[EvaluationResult] = []
-    for dataset in datasets:
-        for method in methods:
-            for seed in seeds:
-                results.append(evaluate(dataset, method, seed=seed))
-    if out_dir is not None:
-        write_results(results, out_dir, methods=methods, datasets=datasets, seeds=seeds)
-    return results
+    jobs = [
+        (dataset, method, seed)
+        for dataset in datasets
+        for method in methods
+        for seed in seeds
+    ]
+    planned_keys = [_job_key(dataset, method, seed) for dataset, method, seed in jobs]
+    planned_key_set = set(planned_keys)
+
+    out_path = Path(out_dir) if out_dir is not None else None
+    csv_path = out_path / "results.csv" if out_path is not None else None
+    existing_by_key: dict[tuple[str, str, int], EvaluationResult] = {}
+    if out_path is not None:
+        out_path.mkdir(parents=True, exist_ok=True)
+        assert csv_path is not None
+        if resume and csv_path is not None and csv_path.is_file():
+            for result in read_results(csv_path):
+                key = _result_key(result)
+                if key in planned_key_set and key not in existing_by_key:
+                    existing_by_key[key] = result
+        kept = [existing_by_key[key] for key in planned_keys if key in existing_by_key]
+        _write_results_csv(kept, csv_path)
+        _write_manifest(
+            out_path,
+            methods=methods,
+            datasets=datasets,
+            seeds=seeds,
+            n_rows=len(kept),
+            planned_rows=len(jobs),
+            n_jobs=n_jobs,
+            resume=resume,
+        )
+
+    completed_by_key = dict(existing_by_key)
+    pending_jobs = [
+        job for job, key in zip(jobs, planned_keys, strict=True) if key not in completed_by_key
+    ]
+
+    def record(result: EvaluationResult) -> None:
+        completed_by_key[_result_key(result)] = result
+        if csv_path is not None:
+            _append_result(csv_path, result)
+            assert out_path is not None
+            _write_manifest(
+                out_path,
+                methods=methods,
+                datasets=datasets,
+                seeds=seeds,
+                n_rows=len(completed_by_key),
+                planned_rows=len(jobs),
+                n_jobs=n_jobs,
+                resume=resume,
+            )
+
+    if n_jobs == 1 or len(pending_jobs) <= 1:
+        for job in pending_jobs:
+            record(_evaluate_job(job))
+    else:
+        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+            for result in executor.map(_evaluate_job, pending_jobs):
+                record(result)
+
+    return [completed_by_key[key] for key in planned_keys if key in completed_by_key]
 
 
 def write_results(
@@ -510,20 +667,17 @@ def write_results(
     path = Path(out_dir)
     path.mkdir(parents=True, exist_ok=True)
     csv_path = path / "results.csv"
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(_RESULT_FIELDS))
-        writer.writeheader()
-        for result in results:
-            writer.writerow(asdict(result))
-    manifest = environment_manifest(
-        {
-            "methods": [asdict(m) for m in methods] if methods else None,
-            "datasets": [d.name for d in datasets] if datasets else None,
-            "seeds": list(seeds) if seeds else None,
-            "n_rows": len(results),
-        }
+    _write_results_csv(results, csv_path)
+    _write_manifest(
+        path,
+        methods=methods,
+        datasets=datasets,
+        seeds=seeds,
+        n_rows=len(results),
+        planned_rows=len(results),
+        n_jobs=1,
+        resume=False,
     )
-    (path / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return csv_path
 
 
@@ -712,7 +866,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="run on generated data to smoke-test the harness (not evidence)",
     )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="worker processes for independent dataset/method/seed combinations",
+    )
+    parser.add_argument(
+        "--resume",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="reuse completed rows in out/results.csv",
+    )
     args = parser.parse_args(argv)
+    if args.n_jobs < 1:
+        parser.error("--n-jobs must be >= 1")
 
     if args.synthetic:
         # Deliberately tiny: this path exists to prove the harness runs, so it
@@ -746,7 +914,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         methods = [by_name[name] for name in args.methods]
 
     results = run_benchmark(
-        datasets, methods, seeds=tuple(args.seeds), out_dir=args.out
+        datasets,
+        methods,
+        seeds=tuple(args.seeds),
+        out_dir=args.out,
+        resume=args.resume,
+        n_jobs=args.n_jobs,
     )
     failures = [r for r in results if r.error]
     for failure in failures:

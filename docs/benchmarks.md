@@ -16,7 +16,7 @@ checked rather than asserted.
   `results.csv`, including failures. `manifest.json` records the Python and OS
   versions, the version of every package that can change a number, and the git
   commit (flagged if the tree was dirty).
-- **Honest statistics.** Comparison uses the Demšar (2006) procedure: a
+- **Honest statistics.** Comparison uses Demšar-style non-parametric checks: a
   Friedman test over the complete block of datasets, average ranks, the Nemenyi
   critical difference, and Holm-corrected pairwise Wilcoxon signed-rank tests.
   Datasets where any method failed are dropped, because the tests need a
@@ -118,7 +118,9 @@ comparisons of mean accuracy, which is dominated by whichever datasets happen
 to be hardest.
 
 A non-significant Friedman result means the data do not support ranking the
-methods at all — report that rather than the ordering.
+methods at all — report that rather than the ordering. The Nemenyi
+critical-difference helper uses the tabulated Demšar values for alpha 0.05 and
+0.10 with 2-20 methods.
 
 ## Runtime and memory
 

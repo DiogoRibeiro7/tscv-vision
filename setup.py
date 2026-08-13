@@ -56,7 +56,12 @@ setup(
     # tests/test_docs_sync.py enforces it.
     extras_require={
         "torch": ["torch>=2.2", "torchvision"],
-        "mlops": ["fastapi>=0.110", "prometheus-client>=0.20", "feast>=0.42"],
+        "mlops": [
+            "fastapi>=0.110",
+            "prometheus-client>=0.20",
+            "feast>=0.42",
+            "uvicorn>=0.29",
+        ],
         "analytics": [
             "shap",
             "lime",

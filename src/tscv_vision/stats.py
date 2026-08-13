@@ -401,10 +401,19 @@ def friedman_test(scores: Array, *, higher_is_better: bool = True) -> FriedmanRe
     n, k = mat.shape
     if k < 2 or n < 2:
         raise ValueError("need at least two methods and two datasets")
-    ranks = average_ranks(mat, higher_is_better=higher_is_better)
-    stat = (12.0 * n / (k * (k + 1.0))) * (
-        float(np.sum(ranks**2)) - k * (k + 1.0) ** 2 / 4.0
-    )
+    signed = -mat if higher_is_better else mat
+    rank_rows = np.vstack([_rankdata(row) for row in signed])
+    ranks = np.asarray(rank_rows.mean(axis=0), dtype=float)
+    rank_sums = np.asarray(rank_rows.sum(axis=0), dtype=float)
+    stat = (12.0 / (n * k * (k + 1.0))) * float(np.sum(rank_sums**2))
+    stat -= 3.0 * n * (k + 1.0)
+
+    tie_sum = 0.0
+    for row in signed:
+        _, counts = np.unique(row, return_counts=True)
+        tie_sum += float(np.sum(counts**3 - counts))
+    correction = 1.0 - tie_sum / (n * (k**3 - k))
+    stat = 0.0 if correction <= 0.0 else stat / correction
     return FriedmanResult(float(stat), float(chi2_sf(stat, k - 1)), ranks)
 
 

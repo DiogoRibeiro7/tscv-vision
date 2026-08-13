@@ -107,6 +107,10 @@ def test_extreme_value_range() -> None:
     assert np.isfinite(encoders.recurrence_plot(pair)).all()
     spec = encoders.spectrogram(np.tile(pair, 4), win=8)
     assert np.isfinite(spec).all()
+    with pytest.raises(ValueError, match="range is too large"):
+        encoders.window_attention(np.tile(pair, 4), window=2)
+    with pytest.raises(ValueError, match="range is too large"):
+        encoders.shapelet_transform(np.tile(pair, 4), k=2, length=2, seed=0)
 
 
 def test_register_encoder() -> None:
@@ -115,4 +119,12 @@ def test_register_encoder() -> None:
 
     encoders.register_encoder("dummy", dummy)
     assert "dummy" in encoders.ENCODER_REGISTRY
+
+
+@pytest.mark.parametrize("name", ["cwt", "msrp", "mp", "matrix_profile"])
+def test_parameterized_registry_entries_have_defaults(name: str) -> None:
+    x = np.sin(np.linspace(0.0, 4 * np.pi, 64))
+    out = encoders.get_encoder(name)(x)
+    assert out.size > 0
+    assert np.isfinite(out).all()
 

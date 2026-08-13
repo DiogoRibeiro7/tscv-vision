@@ -152,13 +152,22 @@ def test_wilcoxon_matches_scipy() -> None:
 def test_friedman_matches_scipy() -> None:
     scistats = pytest.importorskip("scipy.stats")
     rng = np.random.default_rng(4)
-    scores = rng.random((15, 4))
-    got = stats.friedman_test(scores)
-    ref = scistats.friedmanchisquare(*[-scores[:, j] for j in range(scores.shape[1])])
-    assert got.statistic == pytest.approx(ref.statistic, rel=1e-10)
-    assert got.pvalue == pytest.approx(ref.pvalue, rel=1e-9)
-    assert got.ranks.shape == (4,)
-    assert got.ranks.mean() == pytest.approx(2.5)
+    tied = np.array(
+        [
+            [0.90, 0.90, 0.10, 0.10],
+            [0.80, 0.70, 0.70, 0.20],
+            [0.75, 0.75, 0.60, 0.40],
+            [0.95, 0.85, 0.85, 0.10],
+            [0.70, 0.70, 0.70, 0.30],
+        ]
+    )
+    for scores in (rng.random((15, 4)), tied):
+        got = stats.friedman_test(scores)
+        ref = scistats.friedmanchisquare(*[-scores[:, j] for j in range(scores.shape[1])])
+        assert got.statistic == pytest.approx(ref.statistic, rel=1e-10)
+        assert got.pvalue == pytest.approx(ref.pvalue, rel=1e-9)
+        assert got.ranks.shape == (4,)
+        assert got.ranks.mean() == pytest.approx(2.5)
 
 
 # ---------------------------------------------------------------------------

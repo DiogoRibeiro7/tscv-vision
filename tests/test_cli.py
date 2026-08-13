@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 from pytest import CaptureFixture, MonkeyPatch
 
-from tscv_vision import cli
+import tscv_vision
+from tscv_vision import cli, features
 
 
 def test_cli_single(
@@ -41,6 +42,9 @@ def test_cli_single(
     assert "metadata" in data.files
     meta = json.loads(str(data["metadata"]))
     assert meta["encoders"] == ["gaf"]
+    assert meta["tscv_vision_version"] == tscv_vision.__version__
+    assert meta["feature_layout"] == features.feature_layout(bins=8, selected=["intensity"])
+    assert "pywavelets" in meta["optional_backends"]
 
 
 def test_cli_gdf(

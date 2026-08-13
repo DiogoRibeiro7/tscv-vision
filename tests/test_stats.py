@@ -122,6 +122,24 @@ def test_friedman_detects_a_consistent_winner() -> None:
         stats.friedman_test(np.zeros((1, 3)))
 
 
+def test_friedman_applies_tie_correction() -> None:
+    scores = np.array(
+        [
+            [0.90, 0.90, 0.10, 0.10],
+            [0.80, 0.70, 0.70, 0.20],
+            [0.75, 0.75, 0.60, 0.40],
+            [0.95, 0.85, 0.85, 0.10],
+            [0.70, 0.70, 0.70, 0.30],
+        ]
+    )
+    res = stats.friedman_test(scores)
+    uncorrected = (12.0 * scores.shape[0] / (scores.shape[1] * (scores.shape[1] + 1.0))) * (
+        float(np.sum(res.ranks**2)) - scores.shape[1] * (scores.shape[1] + 1.0) ** 2 / 4.0
+    )
+    assert res.statistic > uncorrected
+    assert res.pvalue < stats.chi2_sf(uncorrected, scores.shape[1] - 1)
+
+
 def test_nemenyi_critical_difference_shrinks_with_more_datasets() -> None:
     small = stats.nemenyi_critical_difference(5, 10)
     large = stats.nemenyi_critical_difference(5, 100)

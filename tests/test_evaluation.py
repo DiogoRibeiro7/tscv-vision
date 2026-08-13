@@ -118,6 +118,9 @@ def test_run_benchmark_freezes_raw_outputs(tmp_path: Path) -> None:
     manifest = json.loads((tmp_path / "run" / "manifest.json").read_text())
     assert manifest["n_rows"] == len(results)
     assert manifest["packages"]["numpy"] == np.__version__
+    assert manifest["packages"]["tscv-vision"] == evaluation.__version__
+    assert "pywavelets" in manifest["packages"]
+    assert "kymatio" in manifest["packages"]
     assert manifest["seeds"] == [0, 1]
     assert "python" in manifest and "git_commit" in manifest
 

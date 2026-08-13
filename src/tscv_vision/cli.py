@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import importlib.util
 import json
 import logging
 import sys
@@ -14,13 +15,23 @@ from typing import Any, TypeVar, cast
 import numpy as np
 from numpy.typing import NDArray
 
+from . import __version__, encoders, features
 from . import aggregation as _aggregation
-from . import encoders, features
 from . import fusion as _fusion
 from . import io as _io
 from .sliding import encode_sliding, features_for_sliding
 
 T = TypeVar("T")
+
+_OPTIONAL_BACKENDS = {
+    "pywavelets": "pywt",
+    "scipy": "scipy",
+    "scikit-learn": "sklearn",
+    "kymatio": "kymatio",
+    "numba": "numba",
+    "cupy": "cupy",
+    "torch": "torch",
+}
 
 
 def _positive_int(value: str) -> int:
@@ -44,6 +55,15 @@ def _load_series(path: str) -> NDArray[np.float64]:
     if arr.ndim not in (1, 2):
         raise ValueError("Input must be 1D or 2D time series saved with numpy.save")
     return cast(NDArray[np.float64], arr.astype(float))
+
+
+def _optional_backends() -> dict[str, bool]:
+    """Return availability flags for optional numeric backends."""
+
+    return {
+        name: importlib.util.find_spec(module) is not None
+        for name, module in _OPTIONAL_BACKENDS.items()
+    }
 
 
 def main() -> None:
@@ -326,9 +346,12 @@ def main() -> None:
             out["hop"] = np.array(float(hop))
 
         metadata = {
+            "tscv_vision_version": __version__,
             "encoders": enc_names,
             "bins": args.bins,
             "features": selected if selected is not None else "all",
+            "feature_layout": features.feature_layout(args.bins, selected),
+            "optional_backends": _optional_backends(),
             "channel_fusion": args.channel_fusion,
             "fusion": args.fusion,
             "fusion_weights": weights,

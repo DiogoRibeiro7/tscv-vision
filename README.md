@@ -212,7 +212,7 @@ feature_layout(bins=32)          # {'intensity': 6, 'hist': 32, 'lbp': 256, ...}
 (1-NN Euclidean, raw features, optionally ROCKET) on UCR/UEA datasets using
 their predefined train/test splits. It writes one CSV row per
 `(dataset, method, seed)`, a manifest pinning package versions and the git
-commit, and a summary applying the Demšar (2006) procedure — Friedman test,
+commit, and a summary applying Demšar-style checks: Friedman test,
 average ranks, Nemenyi critical difference and Holm-corrected pairwise
 Wilcoxon tests.
 

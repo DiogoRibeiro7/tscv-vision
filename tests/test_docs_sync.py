@@ -9,12 +9,13 @@ project's history, so they are checked mechanically rather than by review:
 * the documented encoder-registry keys must match
   :data:`~tscv_vision.encoders.ENCODER_REGISTRY`;
 * the package version must be consistent across ``pyproject.toml``,
-  ``setup.py`` and ``tscv_vision.__version__``.
+  ``setup.py``, citation metadata and ``tscv_vision.__version__``.
 """
 
 from __future__ import annotations
 
 import inspect
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -222,11 +223,16 @@ def test_documented_registry_keys_match_code() -> None:
 def test_version_is_consistent_across_the_project() -> None:
     pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")
     setup_py = (REPO / "setup.py").read_text(encoding="utf-8")
+    zenodo = json.loads((REPO / ".zenodo.json").read_text(encoding="utf-8"))
+    citation = (REPO / "CITATION.cff").read_text(encoding="utf-8")
     py_version = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M)
     setup_version = re.search(r'version\s*=\s*"([^"]+)"', setup_py)
-    assert py_version and setup_version
+    citation_version = re.search(r'^version:\s*"([^"]+)"', citation, re.M)
+    assert py_version and setup_version and citation_version
     assert py_version.group(1) == tscv_vision.__version__
     assert setup_version.group(1) == tscv_vision.__version__
+    assert zenodo["version"] == tscv_vision.__version__
+    assert citation_version.group(1) == tscv_vision.__version__
 
 
 def _pyproject_extras() -> dict[str, set[str]]:

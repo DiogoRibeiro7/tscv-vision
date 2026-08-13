@@ -1225,10 +1225,13 @@ def window_attention(x: Array, window: int = 8, *, nan_policy: NanPolicy = "rais
     if window < 1 or window > x.size:
         raise ValueError("window must be in [1, len(x)]")
     windows = np.lib.stride_tricks.sliding_window_view(x, window)
-    scores = windows @ windows.T / math.sqrt(window)
-    scores -= scores.max(axis=1, keepdims=True)
-    exp = np.exp(scores)
-    attn = exp / np.maximum(exp.sum(axis=1, keepdims=True), 1e-12)
+    with np.errstate(over="ignore", invalid="ignore"):
+        scores = windows @ windows.T / math.sqrt(window)
+        scores -= scores.max(axis=1, keepdims=True)
+        exp = np.exp(scores)
+        attn = exp / np.maximum(exp.sum(axis=1, keepdims=True), 1e-12)
+    if not np.all(np.isfinite(attn)):
+        raise ValueError("Input range is too large")
     return cast(Array, attn)
 
 
@@ -2512,7 +2515,10 @@ def shapelet_transform(
     rng = np.random.default_rng(seed)
     idx = rng.choice(n_windows, size=k, replace=False)
     shapelets = windows[idx]
-    dists = np.sqrt(((windows[None, :, :] - shapelets[:, None, :]) ** 2).sum(axis=2))
+    with np.errstate(over="ignore", invalid="ignore"):
+        dists = np.sqrt(((windows[None, :, :] - shapelets[:, None, :]) ** 2).sum(axis=2))
+    if not np.all(np.isfinite(dists)):
+        raise ValueError("Input range is too large")
     dists = dists / (np.max(dists) + 1e-12)
     return cast(Array, dists)
 
@@ -2669,6 +2675,60 @@ def ensemble(
     return cast(Array, arr.mean(axis=0))
 
 
+def _default_cwt(
+    x: Array,
+    scales: Array | None = None,
+    wavelet: Literal["morlet", "mexh", "ricker"] = "morlet",
+    *,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    scale_values = (
+        np.asarray([1.0, 2.0, 4.0, 8.0, 16.0], dtype=float)
+        if scales is None
+        else np.asarray(scales, dtype=float)
+    )
+    return cwt(x, scales=scale_values, wavelet=wavelet, nan_policy=nan_policy)
+
+
+def _default_multi_scale_rp(
+    x: Array,
+    scales: Array | None = None,
+    *,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    series = _validate_series(x, nan_policy=nan_policy)
+    scale_values = (
+        np.asarray([1, 2, 4], dtype=float) if scales is None else np.asarray(scales, dtype=float)
+    )
+    scale_values = scale_values[scale_values <= series.size]
+    return multi_scale_rp(series, scales=scale_values, nan_policy=nan_policy)
+
+
+def _default_matrix_profile(
+    x: Array,
+    m: int | None = None,
+    *,
+    exclusion: int | None = None,
+    normalize: bool = True,
+    nan_policy: NanPolicy = "raise",
+) -> Array:
+    series = _validate_series(x, nan_policy=nan_policy)
+    if series.size < 3:
+        raise ValueError("matrix_profile registry default requires at least 3 samples")
+    window = max(2, min(8, series.size // 4)) if m is None else m
+    n_sub = series.size - window + 1
+    exclusion_value = None if n_sub >= window // 2 + 2 else 0
+    if exclusion is not None:
+        exclusion_value = exclusion
+    return matrix_profile(
+        series,
+        m=window,
+        exclusion=exclusion_value,
+        normalize=normalize,
+        nan_policy=nan_policy,
+    )
+
+
 # register built-in encoders
 register_encoder("gaf", gaf)
 register_encoder("gadf", lambda x: gaf(x, method="difference"))
@@ -2676,14 +2736,14 @@ register_encoder("rp", recurrence_plot)
 register_encoder("spec", spectrogram)
 register_encoder("mtspec", multitaper_spectrogram)
 register_encoder("chirplet", chirplet_transform)
-register_encoder("cwt", cwt)
+register_encoder("cwt", _default_cwt)
 register_encoder("sst", synchrosqueezed_cwt)
 register_encoder("ph", persistence_image)
 register_encoder("eph", extrema_persistence_histogram)
 register_encoder("mtf", mtf)
 register_encoder("otf", ordinal_transition_field)
 register_encoder("gdf", gdf)
-register_encoder("msrp", multi_scale_rp)
+register_encoder("msrp", _default_multi_scale_rp)
 register_encoder("ded", delay_embedding_density)
 register_encoder("dtw", dtw_matrix)
 register_encoder("sax", sax)
@@ -2692,13 +2752,13 @@ register_encoder("attn", window_attention)
 register_encoder("vg", visibility_graph)
 register_encoder("hvg", horizontal_visibility_graph)
 register_encoder("shapelet", shapelet_transform)
-register_encoder("mp", matrix_profile)
+register_encoder("mp", _default_matrix_profile)
 register_encoder("randproj", random_projection_image)
 register_encoder("ensemble", ensemble)
 
 # aliases matching documentation
 register_encoder("visibility_graph", visibility_graph)
-register_encoder("matrix_profile", matrix_profile)
+register_encoder("matrix_profile", _default_matrix_profile)
 register_encoder("persistence_image", persistence_image)
 register_encoder("window_attention", window_attention)
 def _scattering_encoder(x: Array, **kwargs: Any) -> Array:

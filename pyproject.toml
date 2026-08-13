@@ -15,6 +15,7 @@ torchvision = {version = "*", optional = true}
 fastapi = {version = ">=0.110", optional = true}
 prometheus-client = {version = ">=0.20", optional = true}
 feast = {version = ">=0.42", optional = true}
+uvicorn = {version = ">=0.29", optional = true}
 scikit-learn = {version = ">=1.3", optional = true}
 shap = {version = "*", optional = true}
 lime = {version = "*", optional = true}
@@ -33,7 +34,7 @@ kafka-python = {version = "*", optional = true}
 pika = {version = "*", optional = true}
 onnx = {version = "*", optional = true}
 pyts = {version = ">=0.13", optional = true}
-scipy = {version = ">=1.10", optional = true}
+scipy = {version = ">=1.10,<1.17", optional = true}
 kymatio = {version = ">=0.3", optional = true}
 
 [tool.poetry.group.dev.dependencies]
@@ -51,7 +52,7 @@ tscv-features = "tscv_vision.cli:main"
 
 [tool.poetry.extras]
 torch = ["torch", "torchvision"]
-mlops = ["fastapi", "prometheus-client", "feast"]
+mlops = ["fastapi", "prometheus-client", "feast", "uvicorn"]
 analytics = [
     "shap",
     "lime",

@@ -42,6 +42,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from . import __version__
 from . import stats as ts_stats
 from .encoders import get_encoder
 from .features import extract_feature_vector
@@ -414,6 +415,8 @@ def environment_manifest(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         "numpy",
         "scikit-learn",
         "scipy",
+        "pywavelets",
+        "kymatio",
         "pyts",
         "numba",
         "scikit-image",
@@ -421,7 +424,7 @@ def environment_manifest(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
             versions[pkg] = md.version(pkg)
         except Exception:  # pragma: no cover - package absent
-            versions[pkg] = "not installed"
+            versions[pkg] = __version__ if pkg == "tscv-vision" else "not installed"
 
     commit = "unknown"
     dirty = None
@@ -573,7 +576,7 @@ def accuracy_matrix(
 def compare_methods(
     results: Sequence[EvaluationResult], *, alpha: float = 0.05
 ) -> Comparison:
-    """Rank methods across datasets with the Demšar (2006) procedure.
+    """Rank methods across datasets using Demšar-style non-parametric checks.
 
     Runs a Friedman test over the complete block of datasets, reports average
     ranks and the Nemenyi critical difference, and adds Holm-corrected

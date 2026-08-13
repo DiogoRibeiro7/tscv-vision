@@ -60,14 +60,16 @@ def intensity_stats(img: Array) -> Array:
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
-    x = img.astype(float).ravel()
+    x = np.asarray(img, dtype=float).ravel()
     mu = float(np.mean(x))
-    sigma = float(np.std(x) + 1e-12)
+    centered = x - mu
+    sigma = float(np.sqrt(np.mean(centered * centered)) + 1e-12)
     mn = float(np.min(x))
     mx = float(np.max(x))
-    z = (x - mu) / sigma
-    skew = float(np.mean(z**3))
-    kurt = float(np.mean(z**4) - 3.0)
+    z = centered / sigma
+    z2 = z * z
+    skew = float(np.mean(z2 * z))
+    kurt = float(np.mean(z2 * z2) - 3.0)
     arr: Array = np.array([mu, sigma, mn, mx, skew, kurt], dtype=np.float64)
     return arr
 
@@ -129,9 +131,18 @@ def gradient_histogram(img: Array, bins: int = 16) -> Array:
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
+    _, _, mag = _gradient_components(img)
+    return _gradient_histogram_from_mag(mag, bins)
+
+
+def _gradient_components(img: Array) -> tuple[Array, Array, Array]:
     gx = _conv2(img, _GX)
     gy = _conv2(img, _GY)
     mag = np.sqrt(gx * gx + gy * gy)
+    return gx, gy, cast(Array, mag)
+
+
+def _gradient_histogram_from_mag(mag: Array, bins: int = 16) -> Array:
     if np.allclose(mag.max(), 0.0):
         h = np.zeros(bins, dtype=float)
         h[0] = 1.0
@@ -238,8 +249,7 @@ def lbp(img: Array, radius: int = 1) -> Array:
     """
 
     codes = _lbp_codes(img, radius)
-    h, _ = np.histogram(codes.ravel(), bins=256, range=(0, 256), density=True)
-    return h.astype(float)
+    return _lbp_histogram(codes)
 
 
 def _lbp_rotation_map(points: int = _LBP_POINTS) -> np.ndarray:
@@ -280,8 +290,7 @@ def lbp_ri(img: Array, radius: int = 1) -> Array:
 
     codes = _lbp_codes(img, radius)
     ri = _LBP_RI_MAP[codes]
-    h, _ = np.histogram(ri.ravel(), bins=256, range=(0, 256), density=True)
-    return h.astype(float)
+    return _lbp_histogram(ri)
 
 
 def _lbp_uniform_map(points: int = _LBP_POINTS) -> tuple[np.ndarray, int]:
@@ -337,8 +346,13 @@ def lbp_uniform(img: Array, radius: int = 1) -> Array:
 
     codes = _lbp_codes(img, radius)
     uni = _LBP_UNI_MAP[codes]
-    h, _ = np.histogram(uni.ravel(), bins=_LBP_UNI_BINS, range=(0, _LBP_UNI_BINS), density=True)
-    return h.astype(float)
+    return _lbp_histogram(uni, bins=_LBP_UNI_BINS)
+
+
+def _lbp_histogram(codes: np.ndarray, bins: int = 256) -> Array:
+    counts = np.bincount(codes.ravel(), minlength=bins)[:bins].astype(float)
+    total = float(codes.size)
+    return counts / total
 
 
 def glcm_features(
@@ -455,9 +469,11 @@ def edge_density(img: Array, threshold: float | None = None) -> Array:
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
-    gx = _conv2(img, _GX)
-    gy = _conv2(img, _GY)
-    mag = np.sqrt(gx * gx + gy * gy)
+    _, _, mag = _gradient_components(img)
+    return _edge_density_from_mag(mag, threshold=threshold)
+
+
+def _edge_density_from_mag(mag: Array, threshold: float | None = None) -> Array:
     if threshold is None:
         threshold = float(np.mean(mag))
     ratio = float(np.count_nonzero(mag > threshold) / mag.size)
@@ -487,8 +503,11 @@ def orientation_histogram(img: Array, bins: int = 16) -> Array:
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
-    gx = _conv2(img, _GX)
-    gy = _conv2(img, _GY)
+    gx, gy, _ = _gradient_components(img)
+    return _orientation_histogram_from_components(gx, gy, bins)
+
+
+def _orientation_histogram_from_components(gx: Array, gy: Array, bins: int = 16) -> Array:
     ang = np.mod(np.arctan2(gy, gx) + 2 * math.pi, 2 * math.pi)
     h, _ = np.histogram(ang.ravel(), bins=bins, range=(0.0, 2 * math.pi), density=True)
     return h.astype(float)
@@ -518,9 +537,11 @@ def contour_ratio(img: Array, threshold: float | None = None) -> Array:
 
     if img.ndim != 2:
         raise ValueError("img must be 2D")
-    gx = _conv2(img, _GX)
-    gy = _conv2(img, _GY)
-    mag = np.sqrt(gx * gx + gy * gy)
+    _, _, mag = _gradient_components(img)
+    return _contour_ratio_from_mag(mag, threshold=threshold)
+
+
+def _contour_ratio_from_mag(mag: Array, threshold: float | None = None) -> Array:
     if threshold is None:
         threshold = float(np.mean(mag))
     edges = mag > threshold
@@ -761,6 +782,13 @@ FEATURES_REGISTRY: dict[str, FeatureFunc] = {
     "psd": _wrap_no_bins(power_spectral_density),
     "wavelet": _wrap_no_bins(wavelet_stats),
 }
+_DEFAULT_FEATURES_REGISTRY = dict(FEATURES_REGISTRY)
+_LBP_FEATURES = frozenset({"lbp", "lbp_ri", "lbp_uniform"})
+_GRADIENT_FEATURES = frozenset({"gradient", "edge_density", "orientation", "contour"})
+
+
+def _is_default_feature(name: str) -> bool:
+    return FEATURES_REGISTRY.get(name) is _DEFAULT_FEATURES_REGISTRY.get(name)
 
 
 def feature_layout(
@@ -829,6 +857,57 @@ def _resolve_feature_names(selected: Iterable[str] | None) -> list[str]:
     return names
 
 
+def _lbp_feature_from_codes(name: str, codes: np.ndarray) -> Array:
+    if name == "lbp":
+        return _lbp_histogram(codes)
+    if name == "lbp_ri":
+        return _lbp_histogram(_LBP_RI_MAP[codes])
+    if name == "lbp_uniform":
+        return _lbp_histogram(_LBP_UNI_MAP[codes], bins=_LBP_UNI_BINS)
+    raise KeyError(name)
+
+
+def _gradient_feature_from_cache(name: str, gx: Array, gy: Array, mag: Array, bins: int) -> Array:
+    if name == "gradient":
+        return _gradient_histogram_from_mag(mag, bins=16)
+    if name == "edge_density":
+        return _edge_density_from_mag(mag)
+    if name == "orientation":
+        return _orientation_histogram_from_components(gx, gy, bins=bins)
+    if name == "contour":
+        return _contour_ratio_from_mag(mag)
+    raise KeyError(name)
+
+
+def _extract_channel_parts(
+    ch: Array,
+    names: Sequence[str],
+    bins: int,
+    *,
+    explicit: bool,
+) -> list[Array]:
+    parts: list[Array] = []
+    lbp_codes_cache: np.ndarray | None = None
+    gradient_cache: tuple[Array, Array, Array] | None = None
+    for name in names:
+        try:
+            if name in _LBP_FEATURES and _is_default_feature(name):
+                if lbp_codes_cache is None:
+                    lbp_codes_cache = _lbp_codes(ch, radius=1)
+                parts.append(_lbp_feature_from_codes(name, lbp_codes_cache))
+            elif name in _GRADIENT_FEATURES and _is_default_feature(name):
+                if gradient_cache is None:
+                    gradient_cache = _gradient_components(ch)
+                parts.append(_gradient_feature_from_cache(name, *gradient_cache, bins))
+            else:
+                parts.append(FEATURES_REGISTRY[name](ch, bins))
+        except ImportError:
+            if explicit:
+                raise
+            continue
+    return parts
+
+
 def extract_feature_vector(
     img: Array, bins: int = 32, selected: Iterable[str] | None = None
 ) -> Array:
@@ -862,6 +941,7 @@ def extract_feature_vector(
         If no extractor produced output.
     """
 
+    explicit = selected is not None
     names = _resolve_feature_names(selected)
 
     if img.ndim == 2:
@@ -873,13 +953,7 @@ def extract_feature_vector(
 
     parts: list[Array] = []
     for ch in channels:
-        for name in names:
-            try:
-                parts.append(FEATURES_REGISTRY[name](ch, bins))
-            except ImportError:
-                if selected is not None and name in selected:
-                    raise
-                continue
+        parts.extend(_extract_channel_parts(ch, names, bins, explicit=explicit))
     if not parts:
         raise RuntimeError(
             "No feature extractors produced output; install optional "

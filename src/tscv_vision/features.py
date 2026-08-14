@@ -602,7 +602,12 @@ def fractal_dimension(img: Array, threshold: float = 0.5) -> Array:
         counts.append(np.count_nonzero(blocks))
     if len(counts) < 2:
         return np.array([0.0], dtype=float)
-    coeffs = np.polyfit(np.log(sizes[: len(counts)]), np.log(counts), 1)
+    counts_arr = np.asarray(counts, dtype=float)
+    positive = counts_arr > 0.0
+    if int(np.count_nonzero(positive)) < 2:
+        return np.array([0.0], dtype=float)
+    used_sizes = sizes[: len(counts_arr)][positive]
+    coeffs = np.polyfit(np.log(used_sizes), np.log(counts_arr[positive]), 1)
     fd = -coeffs[0]
     return np.array([float(fd)], dtype=float)
 

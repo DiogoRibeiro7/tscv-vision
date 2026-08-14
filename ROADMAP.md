@@ -14,8 +14,18 @@ formula or an independent implementation, and documentation. No encoder remains
 at LEVEL 0; inherited project-defined encoders that still lack formula or
 reference checks are listed below as LEVEL 1 gaps rather than quietly
 overclaimed. The committed 38-dataset UCR run is the first evidence-bearing
-artifact; broader archive coverage remains the v0.3.0 gate for broad empirical
-claims.
+artifact; broader archive coverage is still what broad empirical claims need.
+
+**What the evidence says so far is not flattering, and that is the point.**
+With a ROCKET baseline in the default grid (v0.4.0), no image-feature pipeline
+improves on a raw logistic-regression control, and ROCKET beats all of them
+with a Holm-corrected Wilcoxon p below 1e-4. The committed cost run adds that
+feature extraction, not encoding, is 172x to 639x the bill at length 4096 and
+peaks at 7.2 GiB — so the optimised paths in this package accelerate the
+cheaper half. Both results came out of the harness the package exists to
+provide, which is the strongest argument available that the harness works.
+Neither is a reason to stop; they are the baseline any future representation
+work has to beat.
 
 ## Where validation stands
 
@@ -31,9 +41,37 @@ method under its own name. Generated per-encoder detail lives in
 | 0 — smoke | 0 | no encoder is shape-only |
 | 4 — benchmark | 0 | no encoder has been promoted from the subset run yet |
 
-The empty LEVEL 4 row is the honest headline: a real 38-dataset run now exists
-for the default method set, but the registry has not yet promoted individual
-encoders to benchmark-validated status.
+The empty LEVEL 4 row is the honest headline: two real runs now exist for the
+default method set, but the registry has not yet promoted individual encoders
+to benchmark-validated status. Note what promotion would now record — `gaf`,
+`gadf`, `mtf` and `rp` have been benchmarked and *lost*. LEVEL 4 means measured
+on real data, not vindicated by it, and the promotions should say so.
+
+## Next up
+
+In rough priority order, as of the v0.4.0 release:
+
+1. **Raise the eight LEVEL 1 encoders, or retire them.** The largest remaining
+   honesty gap in the registry, and the one the current stance was written for.
+2. **Backend comparison** (NumPy vs Numba vs Cython vs GPU). The cost run
+   showed the encoders are the cheaper half, which makes this less urgent for
+   throughput than it looked, but it is still an unmeasured claim.
+3. **Robustness sweeps** — noise, missingness per `nan_policy`, irregular
+   lengths. The last unstarted item in the benchmark study.
+4. **Promote the four benchmarked encoders to LEVEL 4**, recording that they
+   were measured and beaten.
+5. **Resolve the overdue deprecation aliases** (see API hygiene below).
+
+Two known tooling problems, neither of which is a roadmap feature but both of
+which will bite a contributor:
+
+- `mypy` cannot run against this project's config in a current environment:
+  `python_version = "3.11"` in `pyproject.toml` against numpy's stubs, which
+  use 3.12 `type` statements. It aborts inside the stubs, so it reports success
+  on code it never checked. The `.pre-commit-config.yaml` mypy hook depends on
+  it.
+- `tests/test_performance.py::test_extract_batch_speed` asserts a wall-clock
+  ratio (`t_opt <= t_base * 1.25`) and fails intermittently under load.
 
 ---
 
@@ -62,7 +100,7 @@ encoders to benchmark-validated status.
 - [x] Random Projection Image
 - [x] Ensemble (stack / mean / weighted)
 
-### Encoders added after 0.2.0 (unreleased)
+### Encoders added after 0.2.0 (shipped in v0.3.0)
 
 Each shipped as its own PR with provenance metadata, validation tests and
 documentation.
@@ -90,7 +128,7 @@ documentation.
 - [x] Wavelet coherence — with the degenerate unsmoothed case documented and
       tested rather than hidden
 
-### Multivariate and backend modules (unreleased)
+### Multivariate and backend modules (v0.3.0)
 
 - [x] `tscv_vision.multivariate` — encoders taking more than one series, with
       shared recurrence machinery, plus `MULTIVARIATE_METADATA` so living
@@ -152,6 +190,23 @@ documentation.
 - [x] Cython extensions (GAF, recurrence, STFT)
 - [x] Optional Numba JIT path for GAF
 - [x] CuPy GPU encoder (GAF) with automatic fallback, batched sliding-window path
+
+### Evidence artifacts (v0.3.1 – v0.4.0)
+
+- [x] `results/ucr-thirty-eight/` — 38 UCR datasets x 9 default methods x 3
+      seeds, 1026 rows, no failures. ROCKET ranks first (mean accuracy 0.9005,
+      average rank 1.14); no image-feature pipeline beats raw logistic
+      regression
+- [x] `results/length-scaling/` — encoder and feature cost at five series
+      lengths, hardware in the manifest. Feature extraction dominates and peak
+      memory, not time, is the binding constraint
+- [x] `benchmark_length_scaling` / `scaling_exponent` — fits `value ~ N**k` so
+      the complexity strings in the representation metadata are measured rather
+      than trusted. Memory exponents came back at 2.00, matching `O(N^2)`
+- [x] `results/pilot-synthetic/` — harness smoke artifact, explicitly not
+      evidence
+- [x] Every committed run re-produced against a clean tree, so all three
+      manifests record `git_dirty: false` as `results/README.md` requires
 
 ### Quality & tooling
 
@@ -251,15 +306,21 @@ no cross-validation scheme can detect.
 - [ ] Shape dictionary, shape transition, wavelet token, phase-aware and
       spectral-shift encoders
 
-Nothing in this track should land before the v0.3.0 benchmark exists: a learned
-representation with no baseline to beat is not evidence of anything.
+That baseline now exists, and it is a demanding one. Anything in this track has
+to be measured against `baseline-rocket-ridge` on the committed subset — mean
+accuracy 0.9005, average rank 1.14 — not against 1-NN Euclidean. A learned
+representation that beats the image pipelines but not ROCKET has not cleared
+the bar, and the harness will say so.
 
 ### API hygiene
 
-- [ ] Remove the 0.2.0 deprecation aliases (`tpa`, `TSHAPExplainer`,
-      `cross_causal_lag`, `bias_report`) in 0.3.0 as announced
+- [ ] **Overdue.** Remove the 0.2.0 deprecation aliases (`tpa`,
+      `TSHAPExplainer`, `cross_causal_lag`, `bias_report`). These were
+      announced for removal *in 0.3.0*; 0.3.0, 0.3.1 and 0.4.0 have all shipped
+      with them still present. Either cut them in the next release or withdraw
+      the announcement — the docs currently promise something untrue
 - [ ] `__all__` consistency check in CI (public API matches the docs)
-- [ ] `py.typed` marker for PEP 561 compliance
+- [x] `py.typed` marker for PEP 561 compliance
 - [ ] Document minimum input length per encoder and enforce it uniformly
 - [ ] Property-based tests (Hypothesis) for encoder shape invariants
 

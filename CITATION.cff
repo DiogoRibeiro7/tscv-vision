@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use tscv-vision in academic work, please cite the archived Zenodo release. The DOI below is the concept DOI and always resolves to the latest version; to cite the exact version you ran, use its version DOI from the identifiers list."
+message: "If you use tscv-vision in academic work, please cite the archived Zenodo release using the DOI below. It is the concept DOI, covering all versions."
 type: software
 title: "tscv-vision: Structured representation engineering for time series"
 authors:
@@ -14,13 +14,6 @@ license: MIT
 version: "0.4.0"
 date-released: "2026-08-14"
 doi: "10.5281/zenodo.21879078"
-identifiers:
-  - type: doi
-    value: "10.5281/zenodo.21879078"
-    description: "Concept DOI - resolves to the latest version"
-  - type: doi
-    value: "10.5281/zenodo.21939221"
-    description: "Version DOI for v0.4.0"
 keywords:
   - time series
   - computer vision

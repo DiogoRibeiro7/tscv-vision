@@ -364,30 +364,23 @@ Tagged releases are published to PyPI through GitHub Actions using PyPI Trusted
 Publishing with OpenID Connect. No PyPI API token is stored in the repository.
 
 Zenodo archiving is configured through [.zenodo.json](.zenodo.json). Each GitHub
-Release is archived automatically and gets its own version DOI, alongside a
-concept DOI that always resolves to the most recent version.
+Release is archived automatically under the project's concept DOI, which always
+resolves to the most recent version.
 
 ## Citation
 
-If you use `tscv-vision` in academic work, cite the archived Zenodo release. The
-badge above and the DOI below are the *concept* DOI, which always resolves to
-the latest version — use it when the specific version does not matter:
+If you use `tscv-vision` in academic work, cite the archived Zenodo release:
 
 ```text
 Diogo Ribeiro. tscv-vision: Structured representation engineering for time
 series. Zenodo. https://doi.org/10.5281/zenodo.21879078
 ```
 
-To cite the exact version you ran, use its version DOI instead. For v0.4.0:
-
-```text
-Diogo Ribeiro. (2026). tscv-vision: Structured representation engineering for
-time series (v0.4.0). Zenodo. https://doi.org/10.5281/zenodo.21939221
-```
-
-Machine-readable metadata is in [CITATION.cff](CITATION.cff). If you are citing
-a benchmark result rather than the software, cite the version DOI, since the
-frozen runs under `results/` are tied to the code that produced them.
+This is the concept DOI and covers all versions. Machine-readable metadata is in
+[CITATION.cff](CITATION.cff). When the specific version matters — citing a
+benchmark result, say, since the frozen runs under `results/` are tied to the
+code that produced them — state the version alongside the DOI, or take the
+version DOI from the [Zenodo record](https://doi.org/10.5281/zenodo.21879078).
 
 ## Support and Security
 

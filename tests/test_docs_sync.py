@@ -338,6 +338,27 @@ def test_changelog_documents_the_current_version() -> None:
     assert f"[{tscv_vision.__version__}]" in changelog
 
 
+def test_module_scope_classification_is_documented() -> None:
+    scoped = tscv_vision.VALIDATED_CORE_MODULES | tscv_vision.CONTRIB_MODULES
+    exported_modules = {
+        name
+        for name in tscv_vision.__all__
+        if name
+        not in {
+            "AutoTSCV",
+            "WindowedDataset",
+            "VALIDATED_CORE_MODULES",
+            "CONTRIB_MODULES",
+        }
+    }
+    assert tscv_vision.VALIDATED_CORE_MODULES.isdisjoint(tscv_vision.CONTRIB_MODULES)
+    assert exported_modules == scoped
+
+    scope_doc = (REPO / "docs" / "scope.md").read_text(encoding="utf-8")
+    for module in sorted(scoped):
+        assert f"`{module}`" in scope_doc
+
+
 def test_readme_does_not_claim_a_fixed_feature_dimension() -> None:
     """Regression: the README advertised 310 dims long after that changed."""
 

@@ -273,14 +273,27 @@ def test_cli_synthetic_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
             "--synthetic",
             "--out",
             str(tmp_path / "out"),
+            "--synthetic-datasets",
+            "2",
+            "--synthetic-length",
+            "24",
+            "--synthetic-n-per-class",
+            "4",
             "--methods",
             "baseline-1nn-euclidean",
             "baseline-raw-logreg",
+            "--seeds",
+            "0",
+            "1",
         ]
     )
     assert code == 0
     assert (tmp_path / "out" / "results.csv").is_file()
     assert (tmp_path / "out" / "summary.md").is_file()
+    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
+    assert manifest["datasets"] == ["Synthetic0", "Synthetic1"]
+    assert manifest["seeds"] == [0, 1]
+    assert manifest["n_rows"] == 8
     assert "Benchmark summary" in capsys.readouterr().out
 
 
@@ -288,6 +301,12 @@ def test_cli_rejects_unknown_method(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         evaluation.main(["--synthetic", "--methods", "not-a-method"])
     assert "unknown method" in capsys.readouterr().err
+
+
+def test_cli_rejects_invalid_synthetic_size(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        evaluation.main(["--synthetic", "--synthetic-datasets", "0"])
+    assert "--synthetic-datasets must be >= 1" in capsys.readouterr().err
 
 
 def test_cli_requires_archive(capsys: pytest.CaptureFixture[str]) -> None:

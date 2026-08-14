@@ -37,6 +37,10 @@ reproducible and should not back a published claim.
 
 ## Status
 
+`pilot-synthetic/` is committed as a harness smoke artifact: 5 generated
+datasets, all default methods, and 3 seeds. It proves the machinery writes the
+expected files, but it is not benchmark evidence.
+
 No archive-scale run is committed yet. The UCR/UEA study is the v0.3.0 gate —
 see [ROADMAP.md](../ROADMAP.md). Until then the library makes no empirical
 claims about encoder accuracy, and neither should anything built on it.

@@ -400,12 +400,40 @@ def evaluate(dataset: TSDataset, method: Method, *, seed: int = 0) -> Evaluation
         )
 
 
-def environment_manifest(extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _git_status_ignoring(paths: Sequence[str | Path]) -> str:
+    """Return porcelain status, excluding generated output paths when possible."""
+
+    command = ["git", "status", "--porcelain", "--untracked-files=all"]
+    if paths:
+        root = Path(
+            subprocess.check_output(
+                ["git", "rev-parse", "--show-toplevel"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        )
+        excludes: list[str] = []
+        for path in paths:
+            try:
+                rel = Path(path).resolve().relative_to(root).as_posix()
+            except ValueError:
+                continue
+            excludes.append(f":!{rel}")
+        if excludes:
+            command.extend(["--", ".", *excludes])
+    return subprocess.check_output(command, text=True, stderr=subprocess.DEVNULL).strip()
+
+
+def environment_manifest(
+    extra: dict[str, Any] | None = None,
+    *,
+    ignore_dirty_paths: Sequence[str | Path] = (),
+) -> dict[str, Any]:
     """Record everything needed to reproduce a run.
 
     Includes Python and OS versions, the versions of every package that can
     change a number, and the current git commit (marked dirty if the working
-    tree has uncommitted changes).
+    tree has uncommitted changes outside ``ignore_dirty_paths``).
     """
 
     import importlib.metadata as md
@@ -433,11 +461,7 @@ def environment_manifest(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         commit = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
         ).strip()
-        dirty = bool(
-            subprocess.check_output(
-                ["git", "status", "--porcelain"], text=True, stderr=subprocess.DEVNULL
-            ).strip()
-        )
+        dirty = bool(_git_status_ignoring(ignore_dirty_paths))
     except Exception:  # pragma: no cover - not a git checkout
         pass
 
@@ -536,7 +560,8 @@ def _write_manifest(
             "planned_rows": planned_rows,
             "n_jobs": n_jobs,
             "resume": resume,
-        }
+        },
+        ignore_dirty_paths=(out_dir,),
     )
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
@@ -867,6 +892,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="run on generated data to smoke-test the harness (not evidence)",
     )
     parser.add_argument(
+        "--synthetic-datasets",
+        type=int,
+        default=3,
+        help="number of generated datasets for --synthetic",
+    )
+    parser.add_argument(
+        "--synthetic-length",
+        type=int,
+        default=48,
+        help="series length for --synthetic datasets",
+    )
+    parser.add_argument(
+        "--synthetic-n-per-class",
+        type=int,
+        default=10,
+        help="train examples per class for --synthetic datasets",
+    )
+    parser.add_argument(
         "--n-jobs",
         type=int,
         default=1,
@@ -881,15 +924,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.n_jobs < 1:
         parser.error("--n-jobs must be >= 1")
+    if args.synthetic_datasets < 1:
+        parser.error("--synthetic-datasets must be >= 1")
+    if args.synthetic_length < 2:
+        parser.error("--synthetic-length must be >= 2")
+    if args.synthetic_n_per_class < 1:
+        parser.error("--synthetic-n-per-class must be >= 1")
 
     if args.synthetic:
         # Deliberately tiny: this path exists to prove the harness runs, so it
         # must stay fast enough for CI.
         datasets = [
             make_synthetic_dataset(
-                f"Synthetic{i}", seed=i, n_per_class=10, length=48, n_classes=2 + i % 2
+                f"Synthetic{i}",
+                seed=i,
+                n_per_class=args.synthetic_n_per_class,
+                length=args.synthetic_length,
+                n_classes=2 + i % 2,
             )
-            for i in range(3)
+            for i in range(args.synthetic_datasets)
         ]
     else:
         if not args.archive:

@@ -1,0 +1,97 @@
+{
+  "python": "3.12.11",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+  "packages": {
+    "tscv-vision": "0.3.0",
+    "numpy": "2.5.2",
+    "scikit-learn": "1.9.0",
+    "scipy": "1.16.3",
+    "pywavelets": "not installed",
+    "kymatio": "not installed",
+    "pyts": "0.13.0",
+    "numba": "0.67.0",
+    "scikit-image": "not installed"
+  },
+  "git_commit": "f89d454c3091fd3d758f1f851801ed092813df19",
+  "git_dirty": false,
+  "methods": [
+    {
+      "name": "baseline-1nn-euclidean",
+      "representation": "raw",
+      "classifier": "knn1",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "baseline-raw-logreg",
+      "representation": "raw",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "gasf-features",
+      "representation": "gaf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "gadf-features",
+      "representation": "gadf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "mtf-features",
+      "representation": "mtf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "rp-features",
+      "representation": "rp",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "ablation-gaf-intensity-only",
+      "representation": "gaf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": [
+        "intensity"
+      ]
+    },
+    {
+      "name": "ablation-gaf-texture-only",
+      "representation": "gaf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": [
+        "lbp",
+        "glcm"
+      ]
+    }
+  ],
+  "datasets": [
+    "Synthetic0",
+    "Synthetic1",
+    "Synthetic2",
+    "Synthetic3",
+    "Synthetic4"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "n_rows": 120,
+  "planned_rows": 120,
+  "n_jobs": 1,
+  "resume": false
+}

@@ -142,6 +142,14 @@ def test_gabor_and_fft_features() -> None:
     assert fft.shape == (4,)
 
 
+def test_fractal_dimension_ignores_zero_box_counts() -> None:
+    img = np.zeros((6, 6))
+    img[-1, -1] = 1.0
+    fd = features.fractal_dimension(img)
+    assert fd.shape == (1,)
+    assert np.isfinite(fd[0])
+
+
 def test_rank_and_select() -> None:
     X = np.array([[1.0, 2.0, 3.0], [1.0, 2.0, 0.0], [1.0, 2.0, 1.0]])
     idx = features.rank_features(X)

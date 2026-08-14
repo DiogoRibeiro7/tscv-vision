@@ -290,13 +290,18 @@ ENCODER_METADATA: dict[str, RepresentationInfo] = {
         ),
         complexity="O(S * N log N)",
         optional_dependency="pywavelets (extra: analytics) for non-Morlet wavelets",
-        validation_level=ValidationLevel.SMOKE,
-        validated_by=(),
+        validation_level=ValidationLevel.INVARIANT,
+        validated_by=(
+            "tests/test_cwt.py::test_cwt_morlet_output_is_finite_and_normalised",
+            "tests/test_cwt.py::test_cwt_zero_signal_has_zero_energy",
+            "tests/test_cwt.py::test_cwt_rejects_invalid_scales",
+        ),
         notes=(
-            "Only shape-tested. The Morlet path is a bespoke FFT implementation "
-            "whose normalisation has not been compared against Torrence & Compo "
-            "or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising "
-            "this to REFERENCE is a v0.3.0 item."
+            "Invariant-tested for finite normalised magnitudes and scale "
+            "validation. The Morlet path is a bespoke FFT implementation whose "
+            "normalisation has not been compared against Torrence & Compo or "
+            "PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising "
+            "this to REFERENCE requires independent numerical comparison."
         ),
     ),
     "chirplet": _info(

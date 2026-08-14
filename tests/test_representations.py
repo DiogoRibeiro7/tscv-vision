@@ -465,7 +465,7 @@ def test_concat_fusion_shapes(series: np.ndarray) -> None:
 
 def test_concat_fusion_validation_level_is_the_weakest_view(series: np.ndarray) -> None:
     fusion = ConcatFusion([get_representation("gaf"), get_representation("cwt")])
-    assert fusion.info.validation_level == ValidationLevel.SMOKE
+    assert fusion.info.validation_level == ValidationLevel.INVARIANT
 
 
 def test_concat_fusion_modes(series: np.ndarray) -> None:

@@ -13,8 +13,9 @@ with a provenance entry in the metadata registry, tests against its defining
 formula or an independent implementation, and documentation. No encoder remains
 at LEVEL 0; inherited project-defined encoders that still lack formula or
 reference checks are listed below as LEVEL 1 gaps rather than quietly
-overclaimed. The archive-scale benchmark study remains the v0.3.0 gate for any
-empirical claim.
+overclaimed. The committed 38-dataset UCR run is the first evidence-bearing
+artifact; broader archive coverage remains the v0.3.0 gate for broad empirical
+claims.
 
 ## Where validation stands
 
@@ -28,10 +29,11 @@ method under its own name. Generated per-encoder detail lives in
 | 2 — synthetic | 13 | checked against the published formula or an analytic answer |
 | 1 — invariant | 8 | mathematical invariants only |
 | 0 — smoke | 0 | no encoder is shape-only |
-| 4 — benchmark | 0 | **no encoder has been evaluated on real datasets** |
+| 4 — benchmark | 0 | no encoder has been promoted from the subset run yet |
 
-The empty LEVEL 4 row is the honest headline: nothing here has been shown to
-be *useful*, only to be correct. That is what v0.3.0 is for.
+The empty LEVEL 4 row is the honest headline: a real 38-dataset run now exists
+for the default method set, but the registry has not yet promoted individual
+encoders to benchmark-validated status.
 
 ---
 
@@ -175,7 +177,7 @@ rather than lowering it: 29 encoders with no benchmark is a larger gap than
 
 ### Benchmark study
 
-- [ ] Run the harness over 30+ UCR/UEA datasets and commit the frozen
+- [x] Run the harness over 30+ UCR/UEA datasets and commit the frozen
       `results.csv`, `manifest.json` and `summary.md` under `results/`
 - [ ] Add ROCKET / MiniRocket as a strong baseline (via `pyts`) to the default
       method set once it is part of a committed run

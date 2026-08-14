@@ -1,0 +1,131 @@
+{
+  "python": "3.12.11",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+  "packages": {
+    "tscv-vision": "0.3.0",
+    "numpy": "2.5.2",
+    "scikit-learn": "1.9.0",
+    "scipy": "1.16.3",
+    "pywavelets": "not installed",
+    "kymatio": "not installed",
+    "pyts": "0.13.0",
+    "numba": "0.67.0",
+    "scikit-image": "not installed"
+  },
+  "git_commit": "6f0d5d9fbe4ff6f9919b51bd60be4a0adbcb757e",
+  "git_dirty": false,
+  "methods": [
+    {
+      "name": "baseline-1nn-euclidean",
+      "representation": "raw",
+      "classifier": "knn1",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "baseline-raw-logreg",
+      "representation": "raw",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "gasf-features",
+      "representation": "gaf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "gadf-features",
+      "representation": "gadf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "mtf-features",
+      "representation": "mtf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "rp-features",
+      "representation": "rp",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "ablation-gaf-intensity-only",
+      "representation": "gaf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": [
+        "intensity"
+      ]
+    },
+    {
+      "name": "ablation-gaf-texture-only",
+      "representation": "gaf",
+      "classifier": "logreg",
+      "bins": 16,
+      "features": [
+        "lbp",
+        "glcm"
+      ]
+    }
+  ],
+  "datasets": [
+    "ArrowHead",
+    "BME",
+    "Beef",
+    "BeetleFly",
+    "BirdChicken",
+    "CBF",
+    "Chinatown",
+    "Coffee",
+    "DiatomSizeReduction",
+    "DistalPhalanxOutlineAgeGroup",
+    "DistalPhalanxOutlineCorrect",
+    "DistalPhalanxTW",
+    "ECG200",
+    "ECGFiveDays",
+    "FaceFour",
+    "Fish",
+    "GunPoint",
+    "GunPointAgeSpan",
+    "GunPointMaleVersusFemale",
+    "GunPointOldVersusYoung",
+    "Ham",
+    "Herring",
+    "ItalyPowerDemand",
+    "Lightning2",
+    "Lightning7",
+    "Meat",
+    "MoteStrain",
+    "OliveOil",
+    "Plane",
+    "ProximalPhalanxOutlineAgeGroup",
+    "ProximalPhalanxOutlineCorrect",
+    "ProximalPhalanxTW",
+    "SonyAIBORobotSurface1",
+    "SonyAIBORobotSurface2",
+    "ToeSegmentation1",
+    "ToeSegmentation2",
+    "TwoLeadECG",
+    "Wine"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "n_rows": 912,
+  "planned_rows": 912,
+  "n_jobs": 8,
+  "resume": false,
+  "data_source": "https://timeseriesclassification.com/aeon-toolkit (cache: .benchmarks/ucr-cache)"
+}

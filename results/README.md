@@ -41,9 +41,11 @@ reproducible and should not back a published claim.
 datasets, all default methods, and 3 seeds. It proves the machinery writes the
 expected files, but it is not benchmark evidence.
 
-No archive-scale run is committed yet. The UCR/UEA study is the v0.3.0 gate —
-see [ROADMAP.md](../ROADMAP.md). Until then the library makes no empirical
-claims about encoder accuracy, and neither should anything built on it.
+`ucr-thirty-eight/` is the first committed real-dataset run: 38 univariate UCR
+datasets, all default methods, and 3 seeds. It is enough to ground claims about
+that fixed method set on that fixed dataset subset, but it is not a full UCR/UEA
+archive study and does not promote every encoder in the registry to benchmark
+validation.
 
 See [docs/benchmarks.md](../docs/benchmarks.md) for how to obtain the archive
 and interpret the statistics.

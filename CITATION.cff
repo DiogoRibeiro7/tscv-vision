@@ -11,7 +11,7 @@ abstract: "A NumPy-first framework for constructing, combining, analyzing, and e
 repository-code: "https://github.com/DiogoRibeiro7/tscv-vision"
 url: "https://github.com/DiogoRibeiro7/tscv-vision"
 license: MIT
-version: "0.3.1"
+version: "0.4.0"
 date-released: "2026-08-14"
 keywords:
   - time series

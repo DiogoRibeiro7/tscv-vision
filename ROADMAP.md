@@ -1,6 +1,6 @@
 # Roadmap
 
-> Last updated: 2026-08-14 (0.3.1 released; unreleased work on `main`)
+> Last updated: 2026-08-14 (0.4.0 released)
 
 This roadmap tracks what has shipped, what is next, and the long-term vision
 for **tscv-vision**. Items are grouped by theme rather than strictly by
@@ -168,12 +168,17 @@ documentation.
 
 ---
 
-## v0.3.0 – Evidence
+## v0.3.0 – v0.4.0 – Evidence
 
 **Theme:** Produce the experimental results the current API surface would need
 to be defensible. The surface has grown since 0.2.0, which raises the bar
 rather than lowering it: 29 encoders with no benchmark is a larger gap than
 19 encoders with no benchmark.
+
+This theme spans more than one release: the UCR run and the paper scaffold
+shipped in 0.3.0/0.3.1, and the ROCKET baseline and the length-scaling run in
+0.4.0. The unchecked items below are what the theme still owes, which is why
+the later milestones are numbered from v0.5.0 onwards.
 
 ### Benchmark study
 
@@ -260,7 +265,7 @@ representation with no baseline to beat is not evidence of anything.
 
 ---
 
-## v0.4.0 – Documentation & usability
+## v0.5.0 – Documentation & usability
 
 **Theme:** Lower the barrier to adoption, grounded in the v0.3.0 evidence.
 
@@ -278,7 +283,7 @@ representation with no baseline to beat is not evidence of anything.
 
 ---
 
-## v0.5.0 – Performance & scale
+## v0.6.0 – Performance & scale
 
 **Theme:** Make large-scale and real-time workloads first-class, measured
 against the v0.3.0 baselines.
@@ -295,7 +300,7 @@ against the v0.3.0 baselines.
 
 ---
 
-## v0.6.0 – Extensibility
+## v0.7.0 – Extensibility
 
 - [ ] Entry-point based encoder and feature-extractor discovery
 - [ ] Validate plugin contracts at registration time (input/output shapes)
@@ -309,7 +314,7 @@ against the v0.3.0 baselines.
 
 ### Release gates
 
-- [ ] All v0.3–v0.6 items resolved or explicitly deferred with rationale
+- [ ] All v0.3–v0.7 items resolved or explicitly deferred with rationale
 - [ ] Test coverage ≥ 90% on core (`encoders`, `features`, `sliding`, `stats`)
 - [ ] Every public function has Parameters, Returns, Raises and an Example
 - [ ] Every named scientific method has an equivalence test or an explicit

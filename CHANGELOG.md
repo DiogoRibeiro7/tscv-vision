@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-14
+
+Evidence release: a strong baseline the image pipelines have to beat, and a
+measurement of what they cost.
+
+The headline is negative and deliberate. With ROCKET in the default grid, no
+image-feature pipeline improves on a raw logistic-regression control, and the
+cost sweep shows the expensive stage is the one the package has not optimised.
+Both were produced by the harness this project exists to provide.
+
 ### Added
 
 - Added `baseline-rocket-ridge` to `evaluation.DEFAULT_METHODS`: the ROCKET
@@ -15,7 +25,6 @@
   `--resume` against the existing 912. The eight original methods were produced
   at a commit whose `encoders.py`, `features.py` and `evaluation.py` are
   byte-identical to the current ones, so all rows reflect the same numeric code.
-
 - Added `benchmark.benchmark_length_scaling` and `benchmark.scaling_exponent`,
   measuring encoder and feature-extraction runtime and peak memory as a function
   of input series length, and fitting `value ~ length**k` on a log-log scale so
@@ -24,13 +33,18 @@
   passes, because `tracemalloc` inflates wall-clock on allocation-heavy code.
 - Added `benchmarks/scaling/run_length_scaling.py` and the frozen
   `results/length-scaling/` run: 4 image-style encoders x 5 lengths, with the
-  hardware recorded in the manifest. It shows that feature extraction costs
-  roughly 200x the encoder at length 4096, that peak memory reaches 7.2 GiB
-  there (about 56x the image), and that measured memory exponents are 2.00,
-  matching the documented `O(N^2)`.
+  hardware recorded in the manifest. Feature extraction costs 172x to 639x the
+  encoder at length 4096 and peaks at 7.2 GiB there, 56.3x the image it is
+  handed. Measured memory exponents match the documented `O(N^2)`: 2.00 for
+  feature extraction throughout, and 2.00 for encoding except `mtf` at 1.82.
 
 ### Changed
 
+- Rewrote the results and claims in `docs/paper.md`. ROCKET takes first place
+  (mean accuracy 0.9005, average rank 1.14), beating every other method with a
+  Holm-corrected Wilcoxon p below 1e-4. No image-feature pipeline improves on
+  raw logistic regression, so the earlier claim that they were "competitive"
+  is withdrawn.
 - Replaced the qualitative claims in `docs/performance.md` with the measured
   cost table, and noted that the package's optimised paths (Cython, Numba,
   CuPy) accelerate the encoders, which the sweep shows to be the smaller half
@@ -40,6 +54,25 @@
   `baseline-rocket-ridge` stays in the default set even when `pyts` is absent,
   so the grid does not silently change shape with the environment; the row is
   recorded as a failure carrying the import error instead.
+- Renumbered the unshipped roadmap milestones. "Documentation & usability" is
+  now v0.5.0, "Performance & scale" v0.6.0 and "Extensibility" v0.7.0, since
+  0.4.0 shipped as evidence work rather than as the documentation milestone.
+- Re-ran all three committed benchmark artifacts against a clean tree so every
+  manifest records `git_dirty: false`, which `results/README.md` requires of
+  any run backing a published claim.
+
+### Fixed
+
+- Bound loop variables in `benchmark_length_scaling` with `functools.partial`
+  rather than default-argument lambdas. The lambdas satisfied ruff's B023 but
+  left the callable's type uninferable under `mypy --strict`.
+
+### Upgrade notes
+
+- Benchmark runs using `DEFAULT_METHODS` now require `pyts` (the `research`
+  extra). Without it the ROCKET row is recorded as a failure and the CLI exits
+  non-zero rather than silently comparing a smaller grid. Pass `--methods` to
+  select the NumPy-only subset explicitly.
 
 ## [0.3.1] - 2026-08-14
 

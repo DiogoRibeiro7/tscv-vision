@@ -114,5 +114,5 @@ def __getattr__(name: str) -> ModuleType | Any:  # pragma: no cover - exercised 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 

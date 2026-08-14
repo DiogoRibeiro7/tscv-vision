@@ -29,7 +29,7 @@ no encoder has reached because no archive-scale run is committed yet
 | `attn` | attention | project-defined | LEVEL 2 — synthetic | `O(W^2 * window) for W = N - window + 1` | — | test_window_attention_matches_softmax_definition |
 | `chirplet` | time_frequency | canonical | LEVEL 2 — synthetic | `O(C * F * W log W) for C chirp rates and F frames` | — | test_recovers_the_chirp_rate_of_a_linear_chirp, test_crossing_chirps_show_both_rates, test_matches_a_direct_atom_correlation |
 | `cross_recurrence_plot` | recurrence | canonical | LEVEL 2 — synthetic | `O(N_x * N_y * m) time and O(N_x * N_y) memory` | — | test_self_cross_recurrence_matches_encoders_recurrence_plot, test_phase_shift_moves_the_diagonal_by_the_lag, test_automatic_threshold_hits_the_target_rate |
-| `cwt` | time_frequency | project-defined | LEVEL 0 — smoke | `O(S * N log N)` | pywavelets (extra: analytics) for non-Morlet wavelets | — |
+| `cwt` | time_frequency | project-defined | LEVEL 1 — invariant | `O(S * N log N)` | pywavelets (extra: analytics) for non-Morlet wavelets | test_cwt_morlet_output_is_finite_and_normalised, test_cwt_zero_signal_has_zero_energy, test_cwt_rejects_invalid_scales |
 | `ded` | nonlinear_dynamics | project-defined | LEVEL 2 — synthetic | `O(N) to embed and bin, O(bins^2) memory` | — | test_logistic_map_traces_its_analytic_parabola, test_unnormalised_mass_is_the_number_of_embedded_points, test_periodic_signal_is_far_more_concentrated_than_noise, test_invariant_to_affine_rescaling |
 | `dtw` | elastic | canonical | LEVEL 2 — synthetic | `O(N^2)` | — | test_dtw_matrix_matches_definition |
 | `ensemble` | meta | project-defined | LEVEL 1 — invariant | `sum of the constituent encoders` | — | test_ensemble_stack, test_ensemble_mean |
@@ -80,7 +80,7 @@ no encoder has reached because no archive-scale run is committed yet
 
 - **Reference:** Torrence & Compo (1998), A Practical Guide to Wavelet Analysis, BAMS 79:61-78
 - **Provenance:** project-defined
-- **Caveats:** Only shape-tested. The Morlet path is a bespoke FFT implementation whose normalisation has not been compared against Torrence & Compo or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising this to REFERENCE is a v0.3.0 item.
+- **Caveats:** Invariant-tested for finite normalised magnitudes and scale validation. The Morlet path is a bespoke FFT implementation whose normalisation has not been compared against Torrence & Compo or PyWavelets; non-Morlet wavelets delegate to PyWavelets. Raising this to REFERENCE requires independent numerical comparison.
 
 ### `ded`
 

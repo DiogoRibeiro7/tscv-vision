@@ -10,10 +10,11 @@ version so that priorities stay clear as scope shifts.
 that the API had outgrown its evidence. Rather than freeze the surface, the
 rule is that nothing *new* lands at LEVEL 0: every encoder added since ships
 with a provenance entry in the metadata registry, tests against its defining
-formula or an independent implementation, and documentation. One inherited
-encoder (`cwt`) is still at LEVEL 0 and is listed below as a gap rather than
-quietly relabelled. The archive-scale benchmark study remains the v0.3.0 gate
-for any empirical claim.
+formula or an independent implementation, and documentation. No encoder remains
+at LEVEL 0; inherited project-defined encoders that still lack formula or
+reference checks are listed below as LEVEL 1 gaps rather than quietly
+overclaimed. The archive-scale benchmark study remains the v0.3.0 gate for any
+empirical claim.
 
 ## Where validation stands
 
@@ -25,8 +26,8 @@ method under its own name. Generated per-encoder detail lives in
 | --- | ---: | --- |
 | 3 — reference | 8 | checked against an independent implementation |
 | 2 — synthetic | 13 | checked against the published formula or an analytic answer |
-| 1 — invariant | 7 | mathematical invariants only |
-| 0 — smoke | 1 | shape only (`cwt`) |
+| 1 — invariant | 8 | mathematical invariants only |
+| 0 — smoke | 0 | no encoder is shape-only |
 | 4 — benchmark | 0 | **no encoder has been evaluated on real datasets** |
 
 The empty LEVEL 4 row is the honest headline: nothing here has been shown to
@@ -191,12 +192,10 @@ rather than lowering it: 29 encoders with no benchmark is a larger gap than
 
 Read `docs/encoder_validation.md` for the current per-encoder status.
 
-- [ ] Raise `cwt` above LEVEL 0: the Morlet path is a bespoke FFT
-      implementation with no numerical comparison against Torrence & Compo
-      or PyWavelets
-- [ ] Raise the LEVEL 1 encoders (`gdf`, `msrp`, `msc`, `randproj`,
+- [ ] Raise the LEVEL 1 encoders (`cwt`, `gdf`, `msrp`, `msc`, `randproj`,
       `shapelet`, `eph`, `ensemble`) to LEVEL 2 with tests against their
-      defining formula, or retire them
+      defining formula, compare them against an independent implementation, or
+      retire them
 - [ ] Numerical validation for the domain modules, or demote them to examples
 - [ ] Decide the fate of thin/unvalidated subsystems (`irregular.py`,
       parts of `multimodal.py`, the neural adapters that have no upstream

@@ -8,10 +8,10 @@ Timing and peak memory are measured in separate passes: `tracemalloc` hooks ever
 
 | Representation | 128 | 256 | 512 | 1024 | 4096 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `gaf` | 0.0006 | 0.0016 | 0.0056 | 0.0196 | 0.1648 |
-| `gadf` | 0.0004 | 0.0006 | 0.0042 | 0.0235 | 0.1117 |
-| `mtf` | 0.0004 | 0.0006 | 0.0021 | 0.0045 | 0.0694 |
-| `rp` | 0.0001 | 0.0001 | 0.0022 | 0.0088 | 0.1621 |
+| `gaf` | 0.0002 | 0.0004 | 0.0026 | 0.0088 | 0.1362 |
+| `gadf` | 0.0007 | 0.0014 | 0.0031 | 0.0169 | 0.0850 |
+| `mtf` | 0.0002 | 0.0003 | 0.0010 | 0.0032 | 0.0458 |
+| `rp` | 0.0000 | 0.0001 | 0.0023 | 0.0093 | 0.1573 |
 
 ## Encode peak memory (MiB)
 
@@ -26,10 +26,10 @@ Timing and peak memory are measured in separate passes: `tracemalloc` hooks ever
 
 | Representation | 128 | 256 | 512 | 1024 | 4096 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `gaf` | 0.0805 | 0.2060 | 0.8449 | 2.4666 | 35.1547 |
-| `gadf` | 0.0572 | 0.2049 | 1.0310 | 2.1178 | 29.8873 |
-| `mtf` | 0.0262 | 0.1153 | 0.4758 | 2.0613 | 28.3130 |
-| `rp` | 0.0239 | 0.0993 | 0.4630 | 1.7856 | 26.4607 |
+| `gaf` | 0.0290 | 0.1238 | 0.5039 | 1.9217 | 30.2882 |
+| `gadf` | 0.1020 | 0.3530 | 1.1999 | 1.9168 | 25.9264 |
+| `mtf` | 0.0222 | 0.0910 | 0.3893 | 1.5859 | 29.2385 |
+| `rp` | 0.0231 | 0.0949 | 0.4208 | 1.7637 | 27.1046 |
 
 ## Feature-extraction peak memory (MiB)
 
@@ -46,7 +46,7 @@ Fitted as `value ~ length**k` on a log-log scale. Compare `k` against the comple
 
 | Representation | encode time | encode memory | feature time | feature memory | documented |
 | --- | ---: | ---: | ---: | ---: | --- |
-| `gaf` | 1.67 | 2.00 | 1.77 | 2.00 | `O(N^2) time and memory` |
-| `gadf` | 1.78 | 2.00 | 1.78 | 2.00 | `O(N^2) time and memory` |
-| `mtf` | 1.50 | 1.82 | 2.02 | 2.00 | `O(N^2) time and memory` |
-| `rp` | 2.41 | 2.00 | 2.03 | 2.00 | `O(N^2) time and memory` |
+| `gaf` | 1.98 | 2.00 | 2.00 | 2.00 | `O(N^2) time and memory` |
+| `gadf` | 1.44 | 2.00 | 1.55 | 2.00 | `O(N^2) time and memory` |
+| `mtf` | 1.61 | 1.82 | 2.07 | 2.00 | `O(N^2) time and memory` |
+| `rp` | 2.43 | 2.00 | 2.05 | 2.00 | `O(N^2) time and memory` |

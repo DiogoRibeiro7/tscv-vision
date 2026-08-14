@@ -13,8 +13,8 @@
     "numba": "0.67.0",
     "scikit-image": "not installed"
   },
-  "git_commit": "c3c63938ccc2437a9c80f60bd91817cab964442f",
-  "git_dirty": true,
+  "git_commit": "d3479194d8a136b9f59b22f86ea000022f88bc4e",
+  "git_dirty": false,
   "representations": [
     "gaf",
     "gadf",

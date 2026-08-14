@@ -20,18 +20,26 @@ Grid:
 
 Three findings, all in `summary.md`:
 
-- **The encoder is not the cost.** At length 4096 the encoders take 0.07–0.16 s
-  while summarising their output into 662 features takes 26–35 s. Feature
-  extraction is roughly 200x the encoder, so optimising the encoders — the part
-  with the Cython, Numba and CuPy paths — attacks the smaller half of the bill.
+- **The encoder is not the cost.** At length 4096 the encoders take 0.046–0.157 s
+  while summarising their output into 662 features takes 25.9–30.3 s — between
+  172x and 639x the encoder. Optimising the encoders, the part carrying the
+  Cython, Numba and CuPy paths, attacks the smaller half of the bill.
 - **Peak memory is the real limit.** Feature extraction peaks at 7.2 GiB on a
-  4096-sample series, about 56x the 128 MiB image it is handed, and is identical
+  4096-sample series, 56.3x the 128 MiB image it is handed, and is identical
   across all four encoders because it depends only on the image size. A 4096
   series is not a large input, and this is already past what a small machine has.
-- **The documented complexity holds.** Measured memory exponents are 2.00 for
-  every encoder, matching the `O(N^2) memory` recorded in the representation
-  metadata. Time exponents (1.50–2.41) straddle 2 with fixed overhead dominating
-  the small lengths.
+- **The documented complexity holds.** Feature-extraction memory scales as
+  `N**2.00` for every encoder, and encode memory does too except for `mtf` at
+  1.82, where per-bin overhead is still visible at the short lengths. Both match
+  the `O(N^2) memory` recorded in the representation metadata.
+
+Encode memory does separate the encoders: at 4096 `rp` peaks at 3x the image
+size, `gaf` and `gadf` at 2x, and `mtf` at 1x.
+
+The timing columns are best-of-three on a machine running other work, and they
+moved by tens of percent between two runs of the same commit; the fitted time
+exponents moved with them (1.44–2.43). Read the times as magnitudes. The memory
+columns are byte-identical across runs.
 
 Encode memory does separate the encoders: at 4096 `rp` peaks at 3x the image
 size, `gaf` and `gadf` at 2x, and `mtf` at 1x.

@@ -164,24 +164,32 @@ were measured separately for `gaf`, `gadf`, `mtf` and `rp` at series lengths
 memory measured in a separate pass so the profiler's overhead does not enter the
 reported times.
 
+Ranges are across the four encoders.
+
 | Series length | Encode | Encode peak | Features | Feature peak |
 | ---: | ---: | ---: | ---: | ---: |
-| 128 | 0.0001–0.0006 s | 0.3–0.4 MiB | 0.02–0.08 s | 7.1 MiB |
-| 512 | 0.002–0.006 s | 2.1–6.0 MiB | 0.46–1.03 s | 112.6 MiB |
-| 1024 | 0.004–0.024 s | 8.1–24.0 MiB | 1.79–2.47 s | 450.1 MiB |
-| 4096 | 0.07–0.16 s | 128–384 MiB | 26.5–35.2 s | 7200.4 MiB |
+| 128 | 0.0000–0.0007 s | 0.3–0.4 MiB | 0.02–0.10 s | 7.1 MiB |
+| 512 | 0.0010–0.0031 s | 2.1–6.0 MiB | 0.39–1.20 s | 112.6 MiB |
+| 1024 | 0.0032–0.0169 s | 8.1–24.0 MiB | 1.59–1.92 s | 450.1 MiB |
+| 4096 | 0.046–0.157 s | 128–384 MiB | 25.9–30.3 s | 7200.4 MiB |
 
 Findings:
 
-- Feature extraction, not encoding, dominates: at length 4096 it costs roughly
-  200x the encoder. This is worth stating because the package's optimised paths
-  (Cython, Numba, CuPy) target the encoders.
-- Peak memory is the binding constraint. Feature extraction peaks at about 56x
-  the size of the image it is handed, so a single 4096-sample series requires
-  over 7 GiB.
-- Measured memory exponents are 2.00 for every encoder, matching the `O(N^2)`
-  complexity recorded in the representation metadata. This is a check on that
-  metadata, not merely a timing report.
+- Feature extraction, not encoding, dominates: at length 4096 it costs between
+  172x and 639x the encoder, depending on which encoder produced the image.
+  This is worth stating because the package's optimised paths (Cython, Numba,
+  CuPy) target the encoders.
+- Peak memory is the binding constraint. Feature extraction peaks at 56.3x the
+  size of the image it is handed, so a single 4096-sample series requires over
+  7 GiB. It is identical across the four encoders, depending only on the image.
+- Measured memory exponents match the `O(N^2)` complexity recorded in the
+  representation metadata: 2.00 for feature extraction in every case, and 2.00
+  for encoding in all but `mtf`, whose 1.82 reflects per-bin overhead that is
+  still visible at the short lengths. This is a check on that metadata, not
+  merely a timing report.
+- The memory columns are reproducible run to run; the timing columns are not.
+  Reported times are the best of three runs on an otherwise loaded machine and
+  should be read as magnitudes, not constants.
 
 ## Limitations
 

@@ -16,19 +16,22 @@ summarised into 662 features:
 
 | Series length | Encode | Encode peak | Features | Feature peak |
 | ---: | ---: | ---: | ---: | ---: |
-| 128 | 0.0001–0.0006 s | 0.3–0.4 MiB | 0.02–0.08 s | 7.1 MiB |
-| 512 | 0.002–0.006 s | 2.1–6.0 MiB | 0.46–1.03 s | 112.6 MiB |
-| 1024 | 0.004–0.024 s | 8.1–24.0 MiB | 1.79–2.47 s | 450.1 MiB |
-| 4096 | 0.07–0.16 s | 128–384 MiB | 26.5–35.2 s | 7200.4 MiB |
+| 128 | 0.0000–0.0007 s | 0.3–0.4 MiB | 0.02–0.10 s | 7.1 MiB |
+| 512 | 0.0010–0.0031 s | 2.1–6.0 MiB | 0.39–1.20 s | 112.6 MiB |
+| 1024 | 0.0032–0.0169 s | 8.1–24.0 MiB | 1.59–1.92 s | 450.1 MiB |
+| 4096 | 0.046–0.157 s | 128–384 MiB | 25.9–30.3 s | 7200.4 MiB |
+
+Ranges are across the four encoders. The memory columns are reproducible; the
+timing columns are best-of-three on a loaded machine and will move.
 
 Two consequences worth planning around:
 
-- **Feature extraction dominates.** At 4096 it is roughly 200x the encoder. The
-  optimised paths in this package — Cython, Numba, CuPy — accelerate the
-  encoders, which is the smaller half of the cost.
+- **Feature extraction dominates.** At 4096 it is 172x to 639x the encoder,
+  depending on the encoder. The optimised paths in this package — Cython,
+  Numba, CuPy — accelerate the encoders, which is the smaller half of the cost.
 - **Peak memory, not time, is the binding constraint.** Feature extraction peaks
-  at about 56x the image it is given, so a 4096-sample series needs over 7 GiB.
-  Memory scales as `N**2.00`, matching the `O(N^2)` recorded in the
+  at 56.3x the image it is given, so a 4096-sample series needs over 7 GiB.
+  Feature memory scales as `N**2.00`, matching the `O(N^2)` recorded in the
   representation metadata, so this is inherent to the dense-image design rather
   than a fixable constant.
 

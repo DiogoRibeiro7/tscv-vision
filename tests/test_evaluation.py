@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +44,30 @@ def test_load_ucr_tsv_roundtrip(tmp_path: Path) -> None:
     assert ds.X_train.shape == (5, 7)
     assert ds.X_test.shape == (4, 7)
     assert evaluation.list_ucr_datasets(tmp_path) == ["Demo"]
+
+
+def test_load_ucr_download_from_local_zip_cache(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    train = np.array([[1.0, 0.0, 1.0, 2.0], [2.0, 3.0, 4.0, 5.0]])
+    test = np.array([[1.0, 6.0, 7.0, 8.0]])
+    train_text = "\n".join(" ".join(str(value) for value in row) for row in train)
+    test_text = "\n".join(" ".join(str(value) for value in row) for row in test)
+    with zipfile.ZipFile(downloads / "Demo.zip", "w") as archive:
+        archive.writestr("Demo_TRAIN.txt", train_text)
+        archive.writestr("Demo_TEST.txt", test_text)
+
+    ds = evaluation.load_ucr_download(
+        "Demo",
+        data_home=tmp_path / "cache",
+        base_url=downloads.resolve().as_uri(),
+    )
+
+    assert ds.name == "Demo"
+    assert ds.X_train.shape == (2, 3)
+    assert ds.X_test.shape == (1, 3)
+    assert ds.y_train.tolist() == [1, 2]
+    assert (tmp_path / "cache" / "Demo" / "Demo_TRAIN.txt").is_file()
 
 
 def test_load_ucr_tsv_reports_missing_and_bad_data(tmp_path: Path) -> None:
@@ -294,6 +319,7 @@ def test_cli_synthetic_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     assert manifest["datasets"] == ["Synthetic0", "Synthetic1"]
     assert manifest["seeds"] == [0, 1]
     assert manifest["n_rows"] == 8
+    assert manifest["data_source"] == "synthetic"
     assert "Benchmark summary" in capsys.readouterr().out
 
 
@@ -307,6 +333,12 @@ def test_cli_rejects_invalid_synthetic_size(capsys: pytest.CaptureFixture[str]) 
     with pytest.raises(SystemExit):
         evaluation.main(["--synthetic", "--synthetic-datasets", "0"])
     assert "--synthetic-datasets must be >= 1" in capsys.readouterr().err
+
+
+def test_cli_download_requires_dataset_names(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        evaluation.main(["--download-ucr"])
+    assert "--datasets or --datasets-file is required" in capsys.readouterr().err
 
 
 def test_cli_requires_archive(capsys: pytest.CaptureFixture[str]) -> None:

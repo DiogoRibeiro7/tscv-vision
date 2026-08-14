@@ -29,16 +29,19 @@ Run the full sweep over a local copy of the UCR archive::
 from __future__ import annotations
 
 import csv
+import io
 import json
 import platform
 import subprocess
 import time
 import tracemalloc
+import zipfile
 from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.request import urlopen
 
 import numpy as np
 from numpy.typing import NDArray
@@ -49,6 +52,7 @@ from .encoders import get_encoder
 from .features import extract_feature_vector
 
 Array = NDArray[np.float64]
+UCR_DOWNLOAD_BASE = "https://timeseriesclassification.com/aeon-toolkit"
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +98,15 @@ def _read_ucr_tsv(path: Path) -> tuple[Array, NDArray[np.int64]]:
     return series, labels
 
 
+def _read_ucr_text(path: Path) -> tuple[Array, NDArray[np.int64]]:
+    raw = np.loadtxt(path)
+    if raw.ndim == 1:
+        raw = raw[None, :]
+    labels = raw[:, 0].astype(np.int64)
+    series = np.ascontiguousarray(raw[:, 1:], dtype=float)
+    return series, labels
+
+
 def load_ucr_tsv(archive: str | Path, name: str) -> TSDataset:
     """Load one dataset from a local ``UCRArchive_2018``-style directory.
 
@@ -128,6 +141,72 @@ def load_ucr_tsv(archive: str | Path, name: str) -> TSDataset:
             raise FileNotFoundError(f"missing split file: {path}")
     X_train, y_train = _read_ucr_tsv(train_path)
     X_test, y_test = _read_ucr_tsv(test_path)
+    if X_train.shape[1] != X_test.shape[1]:
+        raise ValueError(
+            f"{name}: train/test series lengths differ "
+            f"({X_train.shape[1]} vs {X_test.shape[1]})"
+        )
+    if not np.all(np.isfinite(X_train)) or not np.all(np.isfinite(X_test)):
+        raise ValueError(
+            f"{name}: contains NaN/inf; impute before benchmarking so the "
+            "imputation strategy is an explicit, reported choice"
+        )
+    return TSDataset(name, X_train, y_train, X_test, y_test)
+
+
+def _safe_extract_zip(payload: bytes, target: Path) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    root = target.resolve()
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            output = (target / member.filename).resolve()
+            if not output.is_relative_to(root):
+                raise ValueError(f"zip member escapes target directory: {member.filename}")
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member) as src, output.open("wb") as dst:
+                dst.write(src.read())
+
+
+def load_ucr_download(
+    name: str,
+    data_home: str | Path = ".benchmarks/ucr-cache",
+    *,
+    base_url: str = UCR_DOWNLOAD_BASE,
+) -> TSDataset:
+    """Load one UCR dataset from a timeseriesclassification ZIP cache.
+
+    The website publishes one ZIP per dataset containing ``*_TRAIN.txt`` and
+    ``*_TEST.txt`` files in the standard label-first numeric layout. This
+    helper downloads the named ZIP only when the extracted files are absent.
+
+    Parameters
+    ----------
+    name:
+        Dataset name, for example ``"Coffee"``.
+    data_home:
+        Local cache directory for extracted ZIP contents.
+    base_url:
+        Base URL containing ``<name>.zip`` files. Defaults to the current
+        timeseriesclassification aeon-toolkit download endpoint.
+    """
+
+    root = Path(data_home) / name
+    train_path = root / f"{name}_TRAIN.txt"
+    test_path = root / f"{name}_TEST.txt"
+    if not train_path.is_file() or not test_path.is_file():
+        url = f"{base_url.rstrip('/')}/{name}.zip"
+        try:
+            with urlopen(url, timeout=60) as response:
+                payload = response.read()
+            _safe_extract_zip(payload, root)
+        except zipfile.BadZipFile as exc:
+            raise ValueError(f"{name}: downloaded file is not a valid ZIP from {url}") from exc
+    if not train_path.is_file() or not test_path.is_file():
+        raise FileNotFoundError(f"{name}: ZIP did not contain expected TRAIN/TEST text files")
+    X_train, y_train = _read_ucr_text(train_path)
+    X_test, y_test = _read_ucr_text(test_path)
     if X_train.shape[1] != X_test.shape[1]:
         raise ValueError(
             f"{name}: train/test series lengths differ "
@@ -550,6 +629,7 @@ def _write_manifest(
     planned_rows: int | None = None,
     n_jobs: int = 1,
     resume: bool = False,
+    data_source: str | None = None,
 ) -> None:
     manifest = environment_manifest(
         {
@@ -560,6 +640,7 @@ def _write_manifest(
             "planned_rows": planned_rows,
             "n_jobs": n_jobs,
             "resume": resume,
+            "data_source": data_source,
         },
         ignore_dirty_paths=(out_dir,),
     )
@@ -579,6 +660,7 @@ def run_benchmark(
     out_dir: str | Path | None = None,
     resume: bool = True,
     n_jobs: int = 1,
+    data_source: str | None = None,
 ) -> list[EvaluationResult]:
     """Evaluate every ``(dataset, method, seed)`` combination.
 
@@ -603,6 +685,8 @@ def run_benchmark(
     n_jobs:
         Number of worker processes for independent combinations. ``1`` runs
         serially.
+    data_source:
+        Optional manifest label describing where the datasets came from.
 
     Returns
     -------
@@ -645,6 +729,7 @@ def run_benchmark(
             planned_rows=len(jobs),
             n_jobs=n_jobs,
             resume=resume,
+            data_source=data_source,
         )
 
     completed_by_key = dict(existing_by_key)
@@ -666,6 +751,7 @@ def run_benchmark(
                 planned_rows=len(jobs),
                 n_jobs=n_jobs,
                 resume=resume,
+                data_source=data_source,
             )
 
     if n_jobs == 1 or len(pending_jobs) <= 1:
@@ -686,6 +772,7 @@ def write_results(
     methods: Sequence[Method] | None = None,
     datasets: Sequence[TSDataset] | None = None,
     seeds: Sequence[int] | None = None,
+    data_source: str | None = None,
 ) -> Path:
     """Freeze ``results`` to ``out_dir`` and return the CSV path."""
 
@@ -702,6 +789,7 @@ def write_results(
         planned_rows=len(results),
         n_jobs=1,
         resume=False,
+        data_source=data_source,
     )
     return csv_path
 
@@ -874,6 +962,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--archive", help="root of a local UCRArchive_2018-style directory"
     )
     parser.add_argument(
+        "--download-ucr",
+        action="store_true",
+        help="download named UCR datasets from timeseriesclassification ZIPs",
+    )
+    parser.add_argument(
+        "--ucr-cache",
+        default=".benchmarks/ucr-cache",
+        help="cache directory for --download-ucr datasets",
+    )
+    parser.add_argument(
+        "--ucr-download-base",
+        default=UCR_DOWNLOAD_BASE,
+        help="base URL containing <dataset>.zip files for --download-ucr",
+    )
+    parser.add_argument(
         "--datasets", nargs="*", help="dataset names (default: every dataset found)"
     )
     parser.add_argument(
@@ -930,6 +1033,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--synthetic-length must be >= 2")
     if args.synthetic_n_per_class < 1:
         parser.error("--synthetic-n-per-class must be >= 1")
+    if args.synthetic and args.download_ucr:
+        parser.error("--synthetic cannot be combined with --download-ucr")
+    if args.archive and args.download_ucr:
+        parser.error("--archive cannot be combined with --download-ucr")
 
     if args.synthetic:
         # Deliberately tiny: this path exists to prove the harness runs, so it
@@ -944,9 +1051,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             for i in range(args.synthetic_datasets)
         ]
+        data_source = "synthetic"
     else:
-        if not args.archive:
-            parser.error("--archive is required unless --synthetic is given")
         names = list(args.datasets or [])
         if args.datasets_file:
             names += [
@@ -954,9 +1060,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for line in Path(args.datasets_file).read_text().splitlines()
                 if line.strip() and not line.startswith("#")
             ]
-        if not names:
-            names = list_ucr_datasets(args.archive)
-        datasets = [load_ucr_tsv(args.archive, name) for name in names]
+        if args.download_ucr:
+            if not names:
+                parser.error("--datasets or --datasets-file is required with --download-ucr")
+            datasets = [
+                load_ucr_download(
+                    name,
+                    data_home=args.ucr_cache,
+                    base_url=args.ucr_download_base,
+                )
+                for name in names
+            ]
+            data_source = f"{args.ucr_download_base.rstrip('/')} (cache: {args.ucr_cache})"
+        else:
+            if not args.archive:
+                parser.error("--archive is required unless --synthetic or --download-ucr is given")
+            if not names:
+                names = list_ucr_datasets(args.archive)
+            datasets = [load_ucr_tsv(args.archive, name) for name in names]
+            data_source = str(Path(args.archive))
 
     methods: Sequence[Method] = DEFAULT_METHODS
     if args.methods:
@@ -973,6 +1095,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         out_dir=args.out,
         resume=args.resume,
         n_jobs=args.n_jobs,
+        data_source=data_source,
     )
     failures = [r for r in results if r.error]
     for failure in failures:
@@ -992,6 +1115,7 @@ __all__ = [
     "Comparison",
     "DEFAULT_METHODS",
     "load_ucr_tsv",
+    "load_ucr_download",
     "list_ucr_datasets",
     "make_synthetic_dataset",
     "encode_dataset",

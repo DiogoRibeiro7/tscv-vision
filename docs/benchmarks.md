@@ -60,6 +60,13 @@ python -m tscv_vision.evaluation \
 python -m tscv_vision.evaluation --archive /data/UCRArchive_2018 \
     --datasets-file datasets.txt --out results/ucr
 
+# A named subset downloaded one ZIP per dataset from timeseriesclassification.
+python -m tscv_vision.evaluation --download-ucr \
+    --datasets-file results/ucr-thirty/datasets.txt \
+    --ucr-cache .benchmarks/ucr-cache \
+    --seeds 0 1 2 \
+    --out results/ucr-thirty
+
 # Smoke-test the harness with no archive (generated data; not evidence).
 python -m tscv_vision.evaluation --synthetic --out /tmp/bench
 

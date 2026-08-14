@@ -29,6 +29,7 @@ poetry.lock
 .ruff_cache/
 .tox/
 .nox/
+.benchmarks/
 
 # Coverage
 .coverage

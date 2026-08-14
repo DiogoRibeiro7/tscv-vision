@@ -17,10 +17,15 @@
 - Do not create or store a PyPI API token for GitHub Actions. The publish workflow uses OpenID Connect.
 
 ## Zenodo archiving
-- Enable the `DiogoRibeiro7/tscv-vision` repository in Zenodo's GitHub integration.
+- Enable the `DiogoRibeiro7/tscv-vision` repository in Zenodo's GitHub integration. (done)
 - Keep `.zenodo.json` metadata current before each release.
 - Create a GitHub Release for the pushed version tag so Zenodo archives the release and mints a DOI.
-- Add the Zenodo DOI badge to `README.md` after the first archive exists.
+- The `README.md` DOI badge uses the **concept DOI** (`10.5281/zenodo.21879078`), which always resolves to the latest version. It does not need changing per release.
+- **After** the release is archived, add that release's **version DOI** to the `identifiers` list in `CITATION.cff` and to the Citation section of `README.md`. This is necessarily a post-tag step: Zenodo mints the version DOI from the GitHub Release, so it cannot exist in the tagged tree it describes. Retrieve it with:
+
+```bash
+curl -sL https://zenodo.org/api/records/21879078 | python -c "import json,sys; d=json.load(sys.stdin); print(d['metadata']['version'], d['doi'])"
+```
 
 ## Versioning
 - Update `pyproject.toml` and `CHANGELOG.md`

@@ -4,6 +4,7 @@
 [![Publish](https://github.com/DiogoRibeiro7/tscv-vision/actions/workflows/publish.yml/badge.svg)](https://github.com/DiogoRibeiro7/tscv-vision/actions/workflows/publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](pyproject.toml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21879078.svg)](https://doi.org/10.5281/zenodo.21879078)
 
 `tscv-vision` is a framework for constructing, learning, combining, and
 evaluating structured representations of time-series data. It includes
@@ -362,20 +363,31 @@ standards, and pull request expectations.
 Tagged releases are published to PyPI through GitHub Actions using PyPI Trusted
 Publishing with OpenID Connect. No PyPI API token is stored in the repository.
 
-Zenodo archiving is configured through [.zenodo.json](.zenodo.json). After the
-repository is enabled in Zenodo's GitHub integration, each GitHub Release can be
-archived with a version DOI. Add the DOI badge here after the first archive is
-created.
+Zenodo archiving is configured through [.zenodo.json](.zenodo.json). Each GitHub
+Release is archived automatically and gets its own version DOI, alongside a
+concept DOI that always resolves to the most recent version.
 
 ## Citation
 
-If you use `tscv-vision` in academic work, cite the archived Zenodo release
-once available, or use the metadata in [CITATION.cff](CITATION.cff).
+If you use `tscv-vision` in academic work, cite the archived Zenodo release. The
+badge above and the DOI below are the *concept* DOI, which always resolves to
+the latest version — use it when the specific version does not matter:
 
 ```text
-Diogo Ribeiro. tscv-vision: Computer-vision feature engineering for 1D time series.
-https://github.com/DiogoRibeiro7/tscv-vision
+Diogo Ribeiro. tscv-vision: Structured representation engineering for time
+series. Zenodo. https://doi.org/10.5281/zenodo.21879078
 ```
+
+To cite the exact version you ran, use its version DOI instead. For v0.4.0:
+
+```text
+Diogo Ribeiro. (2026). tscv-vision: Structured representation engineering for
+time series (v0.4.0). Zenodo. https://doi.org/10.5281/zenodo.21939221
+```
+
+Machine-readable metadata is in [CITATION.cff](CITATION.cff). If you are citing
+a benchmark result rather than the software, cite the version DOI, since the
+frozen runs under `results/` are tied to the code that produced them.
 
 ## Support and Security
 

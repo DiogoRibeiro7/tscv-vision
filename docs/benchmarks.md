@@ -62,6 +62,11 @@ python -m tscv_vision.evaluation --archive /data/UCRArchive_2018 \
 
 # Smoke-test the harness with no archive (generated data; not evidence).
 python -m tscv_vision.evaluation --synthetic --out /tmp/bench
+
+# Recreate the committed synthetic pilot run.
+python -m tscv_vision.evaluation --synthetic \
+    --synthetic-datasets 5 --synthetic-length 32 --synthetic-n-per-class 6 \
+    --seeds 0 1 2 --out results/pilot-synthetic --no-resume
 ```
 
 Outputs land in `--out`:

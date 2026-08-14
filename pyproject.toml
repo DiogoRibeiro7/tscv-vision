@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tscv-vision"
-version = "0.3.0"
+version = "0.3.1"
 description = "Structured representation engineering for time series (NumPy-first)."
 authors = ["Diogo Ribeiro <dfr@esmad.ipp.pt>"]
 license = "MIT"

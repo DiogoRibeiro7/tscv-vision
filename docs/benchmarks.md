@@ -100,6 +100,7 @@ library also uses threads.
 | --- | --- | --- |
 | `baseline-1nn-euclidean` | z-normalised raw series | 1-NN Euclidean |
 | `baseline-raw-logreg` | z-normalised raw series | logistic regression |
+| `baseline-rocket-ridge` | ROCKET kernels (needs `pyts`) | ridge with CV over alpha |
 | `gasf-features` | GASF image → image features | logistic regression |
 | `gadf-features` | GADF image → image features | logistic regression |
 | `mtf-features` | MTF image → image features | logistic regression |
@@ -108,7 +109,15 @@ library also uses threads.
 | `ablation-gaf-texture-only` | GASF, LBP + GLCM only | logistic regression |
 
 1-NN Euclidean on the z-normalised series is the standard UCR reference point;
-any claim about an encoder should be made relative to it.
+any claim about an encoder should be made relative to it. `baseline-rocket-ridge`
+is the strong modern reference: beating 1-NN is the minimum bar, not evidence
+that a representation is competitive.
+
+ROCKET needs `pyts` (the `research` extra). It stays in the default set even
+when `pyts` is missing, so the grid does not silently change shape with the
+environment — the row is instead recorded with the import error in `error`, and
+the CLI exits non-zero. Install the extra, or pass `--methods` to select the
+NumPy-only subset explicitly.
 
 Define your own by building `Method` objects:
 
@@ -177,4 +186,8 @@ that.
 
 Classifier seeds are threaded through, so the deterministic methods reproduce
 exactly. `rf` and `rocket` vary across BLAS thread counts and platforms; run
-several seeds and report the spread.
+several seeds and report the spread. Since `baseline-rocket-ridge` is a default,
+the default grid is no longer bit-reproducible across machines: ROCKET draws its
+kernels from the seed, so a given seed fixes them on one platform, but the
+convolution and ridge solve go through BLAS. Treat its per-seed spread, not a
+single number, as the result.

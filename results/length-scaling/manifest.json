@@ -1,0 +1,34 @@
+{
+  "python": "3.12.11",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+  "packages": {
+    "tscv-vision": "0.3.1",
+    "numpy": "2.5.2",
+    "scikit-learn": "1.9.0",
+    "scipy": "1.16.3",
+    "pywavelets": "not installed",
+    "kymatio": "not installed",
+    "pyts": "0.13.0",
+    "numba": "0.67.0",
+    "scikit-image": "not installed"
+  },
+  "git_commit": "c3c63938ccc2437a9c80f60bd91817cab964442f",
+  "git_dirty": true,
+  "representations": [
+    "gaf",
+    "gadf",
+    "mtf",
+    "rp"
+  ],
+  "lengths": [
+    128,
+    256,
+    512,
+    1024,
+    4096
+  ],
+  "repeats": 3,
+  "n_rows": 20,
+  "smoke": false
+}

@@ -3,7 +3,7 @@
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
   "packages": {
-    "tscv-vision": "0.3.0",
+    "tscv-vision": "0.3.1",
     "numpy": "2.5.2",
     "scikit-learn": "1.9.0",
     "scipy": "1.16.3",
@@ -13,8 +13,8 @@
     "numba": "0.67.0",
     "scikit-image": "not installed"
   },
-  "git_commit": "6f0d5d9fbe4ff6f9919b51bd60be4a0adbcb757e",
-  "git_dirty": false,
+  "git_commit": "c3c63938ccc2437a9c80f60bd91817cab964442f",
+  "git_dirty": true,
   "methods": [
     {
       "name": "baseline-1nn-euclidean",
@@ -27,6 +27,13 @@
       "name": "baseline-raw-logreg",
       "representation": "raw",
       "classifier": "logreg",
+      "bins": 16,
+      "features": null
+    },
+    {
+      "name": "baseline-rocket-ridge",
+      "representation": "rocket",
+      "classifier": "ridge",
       "bins": 16,
       "features": null
     },
@@ -123,9 +130,9 @@
     1,
     2
   ],
-  "n_rows": 912,
-  "planned_rows": 912,
+  "n_rows": 1026,
+  "planned_rows": 1026,
   "n_jobs": 8,
-  "resume": false,
+  "resume": true,
   "data_source": "https://timeseriesclassification.com/aeon-toolkit (cache: .benchmarks/ucr-cache)"
 }

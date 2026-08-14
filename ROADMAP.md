@@ -1,6 +1,6 @@
 # Roadmap
 
-> Last updated: 2026-08-11 (0.2.0 released; unreleased work on `main`)
+> Last updated: 2026-08-14 (0.3.1 released; unreleased work on `main`)
 
 This roadmap tracks what has shipped, what is next, and the long-term vision
 for **tscv-vision**. Items are grouped by theme rather than strictly by
@@ -179,12 +179,17 @@ rather than lowering it: 29 encoders with no benchmark is a larger gap than
 
 - [x] Run the harness over 30+ UCR/UEA datasets and commit the frozen
       `results.csv`, `manifest.json` and `summary.md` under `results/`
-- [ ] Add ROCKET / MiniRocket as a strong baseline (via `pyts`) to the default
-      method set once it is part of a committed run
+- [x] Add ROCKET as a strong baseline (via `pyts`) to the default method set,
+      committed as part of the 38-dataset run. MiniRocket is still open: `pyts`
+      0.13 ships `ROCKET` only, and adding it means taking a dependency on
+      `sktime` or `aeon`, which is a bigger decision than this item implied
 - [ ] Ablations: encoder alone, feature subsets, encoder + raw, ensemble,
       feature selection on/off
-- [ ] Runtime and peak-memory tables as a function of series length
-      (128 / 256 / 512 / 1024 / 4096)
+- [x] Runtime and peak-memory tables as a function of series length
+      (128 / 256 / 512 / 1024 / 4096), frozen under `results/length-scaling/`
+      with the hardware in the manifest. Covers the four image-style encoders
+      and both pipeline stages; ROCKET needs its own batch-level sweep and is
+      not in it
 - [ ] NumPy vs Numba vs Cython vs GPU under controlled hardware, with the
       hardware recorded in the manifest
 - [ ] Robustness sweeps: additive noise, missingness under each `nan_policy`,

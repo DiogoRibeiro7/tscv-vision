@@ -4,6 +4,38 @@ This project targets real-time feature extraction on resource-constrained
 devices. The streaming utilities offer several knobs to balance accuracy and
 throughput:
 
+## Measured cost
+
+That target is an aim, not a measured property, and the committed sweep in
+[`results/length-scaling/`](../results/length-scaling/) shows how far the batch
+path currently is from it. Reproduce it with
+`python benchmarks/scaling/run_length_scaling.py --repeats 3`.
+
+On the recorded hardware, for one series encoded to an `N x N` image and
+summarised into 662 features:
+
+| Series length | Encode | Encode peak | Features | Feature peak |
+| ---: | ---: | ---: | ---: | ---: |
+| 128 | 0.0001–0.0006 s | 0.3–0.4 MiB | 0.02–0.08 s | 7.1 MiB |
+| 512 | 0.002–0.006 s | 2.1–6.0 MiB | 0.46–1.03 s | 112.6 MiB |
+| 1024 | 0.004–0.024 s | 8.1–24.0 MiB | 1.79–2.47 s | 450.1 MiB |
+| 4096 | 0.07–0.16 s | 128–384 MiB | 26.5–35.2 s | 7200.4 MiB |
+
+Two consequences worth planning around:
+
+- **Feature extraction dominates.** At 4096 it is roughly 200x the encoder. The
+  optimised paths in this package — Cython, Numba, CuPy — accelerate the
+  encoders, which is the smaller half of the cost.
+- **Peak memory, not time, is the binding constraint.** Feature extraction peaks
+  at about 56x the image it is given, so a 4096-sample series needs over 7 GiB.
+  Memory scales as `N**2.00`, matching the `O(N^2)` recorded in the
+  representation metadata, so this is inherent to the dense-image design rather
+  than a fixable constant.
+
+For streaming and windowed workloads the relevant length is the window size, not
+the length of the record, which is why the streaming path stays practical while
+the batch path does not.
+
 ## Incremental Updates
 
 `StreamingEncoder` can incrementally update features using a user-supplied

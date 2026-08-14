@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `baseline-rocket-ridge` to `evaluation.DEFAULT_METHODS`: the ROCKET
+  transform (Dempster, Petitjean & Webb, 2020) via `pyts`, classified by
+  ridge regression with cross-validated alpha. The harness already supported
+  `representation="rocket"`; it was absent from the default grid, which meant
+  the committed comparison ranked the image-feature pipelines against 1-NN
+  Euclidean and logistic regression only. The default grid is now nine methods
+  and the committed run is 1026 rows.
+- Extended `results/ucr-thirty-eight/` with the 114 ROCKET rows, computed with
+  `--resume` against the existing 912. The eight original methods were produced
+  at a commit whose `encoders.py`, `features.py` and `evaluation.py` are
+  byte-identical to the current ones, so all rows reflect the same numeric code.
+
+- Added `benchmark.benchmark_length_scaling` and `benchmark.scaling_exponent`,
+  measuring encoder and feature-extraction runtime and peak memory as a function
+  of input series length, and fitting `value ~ length**k` on a log-log scale so
+  the complexity string in the representation metadata can be checked against a
+  measurement rather than trusted. Timing and memory are measured in separate
+  passes, because `tracemalloc` inflates wall-clock on allocation-heavy code.
+- Added `benchmarks/scaling/run_length_scaling.py` and the frozen
+  `results/length-scaling/` run: 4 image-style encoders x 5 lengths, with the
+  hardware recorded in the manifest. It shows that feature extraction costs
+  roughly 200x the encoder at length 4096, that peak memory reaches 7.2 GiB
+  there (about 56x the image), and that measured memory exponents are 2.00,
+  matching the documented `O(N^2)`.
+
+### Changed
+
+- Replaced the qualitative claims in `docs/performance.md` with the measured
+  cost table, and noted that the package's optimised paths (Cython, Numba,
+  CuPy) accelerate the encoders, which the sweep shows to be the smaller half
+  of the cost.
+- Documented that the default grid is no longer bit-reproducible across
+  machines, since ROCKET's convolutions and the ridge solve go through BLAS.
+  `baseline-rocket-ridge` stays in the default set even when `pyts` is absent,
+  so the grid does not silently change shape with the environment; the row is
+  recorded as a failure carrying the import error instead.
+
 ## [0.3.1] - 2026-08-14
 
 Evidence and release-hardening update.

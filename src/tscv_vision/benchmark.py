@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tracemalloc
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from time import perf_counter
 
 import numpy as np
@@ -322,12 +322,152 @@ def benchmark_time_frequency(
     return results
 
 
+def _time_best(func: Callable[[], object], repeats: int) -> tuple[float, object]:
+    """Return the fastest of ``repeats` runs and the last result.
+
+    The minimum is reported rather than the mean: the true cost is bounded
+    below, and every source of noise on a shared machine adds time.
+    """
+
+    best = float("inf")
+    out: object = None
+    for _ in range(max(1, repeats)):
+        start = perf_counter()
+        out = func()
+        best = min(best, perf_counter() - start)
+    return best, out
+
+
+def _peak_mib(func: Callable[[], object]) -> float:
+    """Return the peak memory of one call, in MiB.
+
+    Measured in its own pass. :mod:`tracemalloc` hooks every allocation, which
+    inflates wall-clock substantially on allocation-heavy code, so timing it at
+    the same time would report a number nobody can reproduce without the
+    profiler attached.
+    """
+
+    already = tracemalloc.is_tracing()
+    if not already:
+        tracemalloc.start()
+    try:
+        func()
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        if not already:
+            tracemalloc.stop()
+    return peak / (1024**2)
+
+
+def benchmark_length_scaling(
+    representations: Sequence[str] = ("gaf", "gadf", "mtf", "rp"),
+    *,
+    lengths: Sequence[int] = (128, 256, 512, 1024, 4096),
+    repeats: int = 3,
+    bins: int = 16,
+    measure_features: bool = True,
+    seed: int = 0,
+) -> list[dict[str, float | str]]:
+    """Measure encoder and feature cost as a function of input series length.
+
+    Both stages of the benchmark pipeline are measured separately, because they
+    do not scale alike: the encoders are ``O(N^2)`` in the length of the series,
+    while feature extraction is linear in the *pixels* it is handed and so
+    ``O(N^2)`` in the same variable, with a far larger constant.
+
+    Timing and memory are measured in separate passes; see :func:`_peak_mib`.
+
+    Parameters
+    ----------
+    representations:
+        Registry keys to measure, resolved through
+        :func:`~tscv_vision.encoders.get_encoder`.
+    lengths:
+        Input series lengths. Cost grows quadratically, so the largest entry
+        dominates the total runtime of the sweep.
+    repeats:
+        Timing repetitions per cell; the fastest is reported.
+    bins:
+        Histogram bins passed to :func:`~tscv_vision.features.extract_feature_vector`.
+    measure_features:
+        When ``False``, only the encoder is measured and the feature columns are
+        ``nan``. Useful when the image is too large to summarise.
+    seed:
+        Seed for the standard-normal input, so a rerun measures the same series.
+
+    Returns
+    -------
+    list of dict
+        One row per ``(representation, length)`` with encode and feature
+        seconds, peak MiB, the number of values in the image and the length of
+        the feature vector.
+    """
+
+    from .features import extract_feature_vector
+
+    rows: list[dict[str, float | str]] = []
+    for name in representations:
+        encoder = encoders.get_encoder(name)
+        for length in lengths:
+            x = np.random.default_rng(seed).standard_normal(int(length))
+            encode_seconds, image = _time_best(lambda x=x, enc=encoder: enc(x), repeats)
+            assert isinstance(image, np.ndarray)
+            row: dict[str, float | str] = {
+                "representation": name,
+                "length": float(length),
+                "encode_seconds": encode_seconds,
+                "encode_peak_mib": _peak_mib(lambda x=x, enc=encoder: enc(x)),
+                "image_values": float(image.size),
+                "feature_seconds": float("nan"),
+                "feature_peak_mib": float("nan"),
+                "n_features": float("nan"),
+            }
+            if measure_features:
+                img = np.asarray(image, dtype=float)
+                feature_seconds, vector = _time_best(
+                    lambda img=img: extract_feature_vector(img, bins=bins), repeats
+                )
+                assert isinstance(vector, np.ndarray)
+                row["feature_seconds"] = feature_seconds
+                row["feature_peak_mib"] = _peak_mib(
+                    lambda img=img: extract_feature_vector(img, bins=bins)
+                )
+                row["n_features"] = float(vector.size)
+            rows.append(row)
+    return rows
+
+
+def scaling_exponent(lengths: Sequence[float], values: Sequence[float]) -> float:
+    """Fit ``value ~ length**k`` on a log-log scale and return ``k``.
+
+    This is the number to compare against the complexity string recorded in the
+    representation metadata: an encoder documented as ``O(N^2)`` whose measured
+    exponent is 1.0 is either mis-documented or not doing what it claims.
+
+    Returns ``nan`` if fewer than two positive pairs are available.
+    """
+
+    pairs = [
+        (float(n), float(v))
+        for n, v in zip(lengths, values, strict=True)
+        if n > 0 and v > 0 and np.isfinite(v)
+    ]
+    if len(pairs) < 2:
+        return float("nan")
+    log_n = np.log(np.array([p[0] for p in pairs]))
+    log_v = np.log(np.array([p[1] for p in pairs]))
+    slope, _ = np.polyfit(log_n, log_v, 1)
+    return float(slope)
+
+
 __all__ = [
     "benchmark_streaming",
     "benchmark_pipeline",
     "benchmark_encoder",
     "benchmark_sliding_gaf",
     "benchmark_time_frequency",
+    "benchmark_length_scaling",
+    "scaling_exponent",
 ]
 
 

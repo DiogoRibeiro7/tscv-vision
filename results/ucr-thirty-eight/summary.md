@@ -1,25 +1,34 @@
 # Benchmark summary
 
-38 datasets x 8 methods.
+38 datasets x 9 methods.
 
-Friedman chi-square = 82.045, p = 5.27e-15. Nemenyi critical difference (alpha=0.05) = 1.703.
+Friedman chi-square = 151.932, p = 7.749e-29. Nemenyi critical difference (alpha=0.05) = 1.949.
 
 | Method | Mean accuracy | Average rank |
 | --- | ---: | ---: |
-| baseline-raw-logreg | 0.8200 | 3.01 |
-| gadf-features | 0.7706 | 3.45 |
-| baseline-1nn-euclidean | 0.7906 | 3.58 |
-| rp-features | 0.7611 | 3.83 |
-| gasf-features | 0.7612 | 3.84 |
-| ablation-gaf-texture-only | 0.6924 | 5.96 |
-| mtf-features | 0.6701 | 6.04 |
-| ablation-gaf-intensity-only | 0.6230 | 6.29 |
+| baseline-rocket-ridge | 0.9005 | 1.14 |
+| baseline-raw-logreg | 0.8200 | 3.95 |
+| gadf-features | 0.7706 | 4.43 |
+| baseline-1nn-euclidean | 0.7906 | 4.57 |
+| gasf-features | 0.7612 | 4.83 |
+| rp-features | 0.7611 | 4.83 |
+| ablation-gaf-texture-only | 0.6924 | 6.95 |
+| mtf-features | 0.6701 | 7.04 |
+| ablation-gaf-intensity-only | 0.6230 | 7.26 |
 
 ## Pairwise Wilcoxon signed-rank (Holm-corrected)
 
 | A | B | mean diff | wins A | wins B | ties | p | p (Holm) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| ablation-gaf-intensity-only | baseline-raw-logreg | -0.1971 | 7 | 30 | 1 | 1.435e-06 | 4.018e-05 |
+| baseline-rocket-ridge | mtf-features | +0.2304 | 38 | 0 | 0 | 7.737e-08 | 2.785e-06 |
+| baseline-rocket-ridge | rp-features | +0.1394 | 38 | 0 | 0 | 7.74e-08 | 2.785e-06 |
+| ablation-gaf-intensity-only | baseline-rocket-ridge | -0.2775 | 1 | 37 | 0 | 9.087e-08 | 3.09e-06 |
+| ablation-gaf-texture-only | baseline-rocket-ridge | -0.2081 | 0 | 37 | 1 | 1.14e-07 | 3.761e-06 |
+| baseline-1nn-euclidean | baseline-rocket-ridge | -0.1100 | 0 | 37 | 1 | 1.14e-07 | 3.761e-06 |
+| baseline-rocket-ridge | gadf-features | +0.1300 | 37 | 0 | 1 | 1.14e-07 | 3.761e-06 |
+| baseline-rocket-ridge | gasf-features | +0.1394 | 37 | 0 | 1 | 1.14e-07 | 3.761e-06 |
+| ablation-gaf-intensity-only | baseline-raw-logreg | -0.1971 | 7 | 30 | 1 | 1.435e-06 | 4.162e-05 |
+| baseline-raw-logreg | baseline-rocket-ridge | -0.0805 | 2 | 35 | 1 | 3.253e-06 | 9.107e-05 |
 | ablation-gaf-texture-only | gasf-features | -0.0687 | 3 | 34 | 1 | 3.5e-06 | 9.451e-05 |
 | baseline-raw-logreg | mtf-features | +0.1499 | 31 | 5 | 2 | 5.616e-06 | 0.000146 |
 | ablation-gaf-intensity-only | baseline-1nn-euclidean | -0.1676 | 6 | 30 | 2 | 6.05e-06 | 0.0001512 |

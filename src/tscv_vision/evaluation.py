@@ -301,10 +301,18 @@ class Method:
 
 
 #: A defensible default sweep: the standard baseline, a raw-feature control,
-#: the classic imaging encoders, and an ablation over feature subsets.
+#: a strong modern baseline, the classic imaging encoders, and an ablation over
+#: feature subsets.
+#:
+#: ``baseline-rocket-ridge`` requires :mod:`pyts` (the ``research`` extra). It is
+#: included unconditionally rather than when the import happens to succeed, so
+#: the grid is the same everywhere: without ``pyts`` the row is recorded as a
+#: failure with the reason, instead of the comparison silently losing its
+#: strongest baseline.
 DEFAULT_METHODS: tuple[Method, ...] = (
     Method("baseline-1nn-euclidean", "raw", "knn1"),
     Method("baseline-raw-logreg", "raw", "logreg"),
+    Method("baseline-rocket-ridge", "rocket", "ridge"),
     Method("gasf-features", "gaf", "logreg"),
     Method("gadf-features", "gadf", "logreg"),
     Method("mtf-features", "mtf", "logreg"),

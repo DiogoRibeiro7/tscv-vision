@@ -47,5 +47,12 @@ that fixed method set on that fixed dataset subset, but it is not a full UCR/UEA
 archive study and does not promote every encoder in the registry to benchmark
 validation.
 
+`length-scaling/` is a cost run, not an accuracy run: encoder and
+feature-extraction runtime and peak memory for the four image-style encoders at
+five series lengths. It backs the performance claims in
+[docs/performance.md](../docs/performance.md) and the paper's runtime figure,
+and is produced by `benchmarks/scaling/run_length_scaling.py` rather than by the
+evaluation harness.
+
 See [docs/benchmarks.md](../docs/benchmarks.md) for how to obtain the archive
 and interpret the statistics.

@@ -16,6 +16,6 @@ python -m tscv_vision.evaluation --synthetic \
 Grid:
 
 - 5 generated datasets: `Synthetic0` through `Synthetic4`
-- 8 default methods from `evaluation.DEFAULT_METHODS`
+- 9 default methods from `evaluation.DEFAULT_METHODS`
 - 3 seeds: `0`, `1`, `2`
-- 120 rows in `results.csv`
+- 135 rows in `results.csv`

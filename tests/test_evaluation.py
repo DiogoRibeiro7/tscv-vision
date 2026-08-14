@@ -106,6 +106,55 @@ def test_encode_dataset_shapes() -> None:
         evaluation.encode_dataset(ds.X_train, evaluation.Method("m", "rocket"))
 
 
+def test_default_methods_include_a_strong_baseline() -> None:
+    """The grid carries a modern baseline, not only 1-NN and the encoders.
+
+    Ranking image features against 1-NN Euclidean alone flatters them. ROCKET
+    is the cheap strong baseline the comparison has to survive, so it belongs
+    in the default set rather than in an opt-in one.
+    """
+
+    by_name = {m.name: m for m in evaluation.DEFAULT_METHODS}
+    rocket = by_name["baseline-rocket-ridge"]
+    assert rocket.representation == "rocket"
+    assert rocket.classifier == "ridge"
+    # It is the only default needing an optional backend; the rest are NumPy-only.
+    needing_pyts = [m.name for m in evaluation.DEFAULT_METHODS if m.representation == "rocket"]
+    assert needing_pyts == ["baseline-rocket-ridge"]
+
+
+def test_rocket_features_do_not_depend_on_the_rest_of_the_batch() -> None:
+    """A transform fitted on train must not re-fit on what it is asked to encode.
+
+    Row-independence is the observable consequence: encoding two test series
+    together gives the same numbers as encoding either one alone. A transform
+    that quietly used batch statistics would fail this, and that failure is
+    exactly the leak the harness claims not to have.
+    """
+
+    pytest.importorskip("pyts")
+    from pyts.transformation import ROCKET
+
+    ds = _tiny_dataset()
+    method = evaluation.Method("m", "rocket", "ridge")
+    train = evaluation.encode_dataset(ds.X_train, evaluation.Method("raw", "raw"))
+    fitted = ROCKET(n_kernels=64, random_state=0).fit(train)
+
+    full = evaluation.encode_dataset(ds.X_test, method, rocket_transform=fitted)
+    alone = evaluation.encode_dataset(ds.X_test[:1], method, rocket_transform=fitted)
+    np.testing.assert_allclose(full[:1], alone)
+
+
+def test_rocket_baseline_evaluates_end_to_end() -> None:
+    pytest.importorskip("pyts")
+    ds = _tiny_dataset()
+    result = evaluation.evaluate(ds, evaluation.Method("rk", "rocket", "ridge"), seed=0)
+    assert result.error == ""
+    assert 0.0 <= result.accuracy <= 1.0
+    # ROCKET emits two features (max and proportion of positive values) per kernel.
+    assert result.n_features > ds.length
+
+
 def test_evaluate_returns_measurements() -> None:
     ds = _tiny_dataset()
     result = evaluation.evaluate(ds, evaluation.Method("nn", "raw", "knn1"))

@@ -17,6 +17,14 @@ python -m tscv_vision.evaluation --download-ucr \
 Grid:
 
 - 38 UCR datasets listed in `datasets.txt`
-- 8 default methods from `evaluation.DEFAULT_METHODS`
+- 9 default methods from `evaluation.DEFAULT_METHODS`
 - 3 seeds: `0`, `1`, `2`
-- 912 planned rows in `results.csv`
+- 1026 planned rows in `results.csv`
+
+The `baseline-rocket-ridge` rows were added after the original eight methods,
+by rerunning with `--resume` so only the missing rows were computed. The eight
+original methods were produced at commit `6f0d5d9`, whose `encoders.py`,
+`features.py` and `evaluation.py` are byte-identical to the commit recorded in
+the current `manifest.json`, so every row in the file reflects the same numeric
+code. ROCKET requires `pyts`; see `docs/benchmarks.md` for why the default grid
+keeps it even where that package is absent.

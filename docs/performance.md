@@ -4,6 +4,41 @@ This project targets real-time feature extraction on resource-constrained
 devices. The streaming utilities offer several knobs to balance accuracy and
 throughput:
 
+## Measured cost
+
+That target is an aim, not a measured property, and the committed sweep in
+[`results/length-scaling/`](../results/length-scaling/) shows how far the batch
+path currently is from it. Reproduce it with
+`python benchmarks/scaling/run_length_scaling.py --repeats 3`.
+
+On the recorded hardware, for one series encoded to an `N x N` image and
+summarised into 662 features:
+
+| Series length | Encode | Encode peak | Features | Feature peak |
+| ---: | ---: | ---: | ---: | ---: |
+| 128 | 0.0000–0.0007 s | 0.3–0.4 MiB | 0.02–0.10 s | 7.1 MiB |
+| 512 | 0.0010–0.0031 s | 2.1–6.0 MiB | 0.39–1.20 s | 112.6 MiB |
+| 1024 | 0.0032–0.0169 s | 8.1–24.0 MiB | 1.59–1.92 s | 450.1 MiB |
+| 4096 | 0.046–0.157 s | 128–384 MiB | 25.9–30.3 s | 7200.4 MiB |
+
+Ranges are across the four encoders. The memory columns are reproducible; the
+timing columns are best-of-three on a loaded machine and will move.
+
+Two consequences worth planning around:
+
+- **Feature extraction dominates.** At 4096 it is 172x to 639x the encoder,
+  depending on the encoder. The optimised paths in this package — Cython,
+  Numba, CuPy — accelerate the encoders, which is the smaller half of the cost.
+- **Peak memory, not time, is the binding constraint.** Feature extraction peaks
+  at 56.3x the image it is given, so a 4096-sample series needs over 7 GiB.
+  Feature memory scales as `N**2.00`, matching the `O(N^2)` recorded in the
+  representation metadata, so this is inherent to the dense-image design rather
+  than a fixable constant.
+
+For streaming and windowed workloads the relevant length is the window size, not
+the length of the record, which is why the streaming path stays practical while
+the batch path does not.
+
 ## Incremental Updates
 
 `StreamingEncoder` can incrementally update features using a user-supplied

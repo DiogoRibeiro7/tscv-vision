@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tracemalloc
 from collections.abc import Callable, Sequence
+from functools import partial
 from time import perf_counter
 
 import numpy as np
@@ -410,13 +411,17 @@ def benchmark_length_scaling(
         encoder = encoders.get_encoder(name)
         for length in lengths:
             x = np.random.default_rng(seed).standard_normal(int(length))
-            encode_seconds, image = _time_best(lambda x=x, enc=encoder: enc(x), repeats)
+            # partial, not a lambda with default arguments: the default-argument
+            # trick binds the loop variables but leaves the callable's type
+            # uninferable, which mypy rejects under --strict.
+            encode_call = partial(encoder, x)
+            encode_seconds, image = _time_best(encode_call, repeats)
             assert isinstance(image, np.ndarray)
             row: dict[str, float | str] = {
                 "representation": name,
                 "length": float(length),
                 "encode_seconds": encode_seconds,
-                "encode_peak_mib": _peak_mib(lambda x=x, enc=encoder: enc(x)),
+                "encode_peak_mib": _peak_mib(encode_call),
                 "image_values": float(image.size),
                 "feature_seconds": float("nan"),
                 "feature_peak_mib": float("nan"),
@@ -424,14 +429,11 @@ def benchmark_length_scaling(
             }
             if measure_features:
                 img = np.asarray(image, dtype=float)
-                feature_seconds, vector = _time_best(
-                    lambda img=img: extract_feature_vector(img, bins=bins), repeats
-                )
+                feature_call = partial(extract_feature_vector, img, bins=bins)
+                feature_seconds, vector = _time_best(feature_call, repeats)
                 assert isinstance(vector, np.ndarray)
                 row["feature_seconds"] = feature_seconds
-                row["feature_peak_mib"] = _peak_mib(
-                    lambda img=img: extract_feature_vector(img, bins=bins)
-                )
+                row["feature_peak_mib"] = _peak_mib(feature_call)
                 row["n_features"] = float(vector.size)
             rows.append(row)
     return rows

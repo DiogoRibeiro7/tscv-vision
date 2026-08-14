@@ -11,6 +11,44 @@ import importlib
 from types import ModuleType
 from typing import Any
 
+VALIDATED_CORE_MODULES = frozenset(
+    {
+        "aggregation",
+        "analysis",
+        "analytics",
+        "automl",
+        "dataset",
+        "encoders",
+        "evaluation",
+        "features",
+        "fusion",
+        "gpu",
+        "io",
+        "multivariate",
+        "parallel",
+        "pipeline",
+        "representations",
+        "research",
+        "scattering",
+        "sliding",
+        "stats",
+        "streaming",
+    }
+)
+"""Submodules that belong to the validated core/research surface."""
+
+CONTRIB_MODULES = frozenset(
+    {
+        "domains",
+        "irregular",
+        "ml_integration",
+        "mlops",
+        "multimodal",
+        "neural",
+    }
+)
+"""Experimental integration surface kept for compatibility before extraction."""
+
 __all__ = [
     "aggregation",
     "analysis",
@@ -35,10 +73,13 @@ __all__ = [
     "representations",
     "research",
     "scattering",
+    "sliding",
     "stats",
     "streaming",
     "WindowedDataset",
     "AutoTSCV",
+    "VALIDATED_CORE_MODULES",
+    "CONTRIB_MODULES",
 ]
 
 

@@ -27,8 +27,8 @@ stay small.
 - Leakage-safe evaluation: nested cross-validation helpers, SciPy-free
   statistical tests, and a UCR/UEA benchmark harness that freezes its raw
   outputs.
-- Optional extras for analytics, GPU acceleration, neural integrations, MLOps,
-  and domain adapters.
+- Optional extras for analytics, GPU acceleration, and deliberately separated
+  experimental integrations.
 - Release-ready packaging with PyPI Trusted Publishing and Zenodo metadata.
 
 ## Installation
@@ -39,7 +39,8 @@ Install the core package:
 pip install tscv-vision
 ```
 
-Install optional extras only when needed:
+Install optional extras only when needed. These extras extend the validated
+core and research surface:
 
 | Extra | Command | Purpose |
 | --- | --- | --- |
@@ -47,7 +48,6 @@ Install optional extras only when needed:
 | `ml` | `pip install "tscv-vision[ml]"` | scikit-learn transformer, pipelines, model selection |
 | `research` | `pip install "tscv-vision[research]"` | Benchmark harness, including the ROCKET baseline |
 | `analytics` | `pip install "tscv-vision[analytics]"` | SHAP, LIME, UMAP, plotting, wavelets |
-| `domains` | `pip install "tscv-vision[domains]"` | Domain adapters backed by scikit-learn |
 | `speed` | `pip install "tscv-vision[speed]"` | Numba JIT encoder paths |
 | `spectral` | `pip install "tscv-vision[spectral]"` | DPSS tapers for the multitaper spectrogram |
 | `scattering` | `pip install "tscv-vision[scattering]"` | Kymatio wavelet scattering |
@@ -55,6 +55,14 @@ Install optional extras only when needed:
 | `io` | `pip install "tscv-vision[io]"` | Arrow / Parquet / HDF5 readers and writers |
 | `streaming` | `pip install "tscv-vision[streaming]"` | Redis, Kafka and RabbitMQ stream sources |
 | `distributed` | `pip install "tscv-vision[distributed]"` | Dask-backed parallel map |
+
+The following extras expose experimental integration code kept for backwards
+compatibility while it is evaluated for extraction into a contrib package. See
+[docs/scope.md](docs/scope.md) for the module split.
+
+| Extra | Command | Purpose |
+| --- | --- | --- |
+| `domains` | `pip install "tscv-vision[domains]"` | Domain adapters backed by scikit-learn |
 | `mlops` | `pip install "tscv-vision[mlops]"` | FastAPI, Prometheus, Feast integrations |
 | `torch` | `pip install "tscv-vision[torch]"` | Torch-based neural components |
 | `onnx` | `pip install "tscv-vision[onnx]"` | ONNX tensor export |

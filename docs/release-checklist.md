@@ -39,9 +39,7 @@
 - `cli`: YAML configuration (`pyyaml`)
 - `analytics`: advanced analytics and visualization (`scikit-learn`, `shap`, `lime`, `umap-learn`, `matplotlib`, `seaborn`, `pywavelets`)
 - `gpu`: CuPy-accelerated encoders (`cupy`)
-- `torch`: neural encoders (`torch`)
-- `mlops`: model serving and monitoring (`fastapi`, `prometheus-client`, `feast`)
-- `domains`: domain adapters (`scikit-learn`)
+- Experimental/contrib extras: `torch`, `mlops`, `domains`, `onnx`
 
 ## Installation
 - Minimal: `pip install tscv-vision`

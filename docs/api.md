@@ -16,6 +16,13 @@ and says so in its docstring. Several names changed in 0.2.0 for this reason —
 see the [changelog](../CHANGELOG.md#020). Old names still work for one release
 and emit `DeprecationWarning`.
 
+## Scope policy
+
+The validated core and the experimental integration surface are tracked in
+`tscv_vision.VALIDATED_CORE_MODULES` and `tscv_vision.CONTRIB_MODULES`. See
+[scope.md](scope.md). Contrib modules remain importable for compatibility but
+are candidates for extraction from the benchmark-critical package surface.
+
 | Old name | New name | Why |
 | --- | --- | --- |
 | `encoders.persistence_image` (histogram) | `encoders.extrema_persistence_histogram` | Did not compute persistent homology. `persistence_image` now does. |

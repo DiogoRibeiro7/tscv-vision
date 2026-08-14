@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-14
+
+Evidence and release-hardening update.
+
+### Added
+
+- Added a cached direct UCR ZIP loader in `tscv_vision.evaluation` for named
+  datasets downloaded from `timeseriesclassification.com/aeon-toolkit`.
+- Committed `results/ucr-thirty-eight/`, a 38-dataset UCR benchmark subset with
+  all default methods, three classifier seeds, 912 completed rows and no failed
+  rows.
+- Added `results/pilot-synthetic/`, a small generated harness smoke artifact.
+- Added `docs/paper.md`, a software-paper draft scaffold grounded in the
+  committed benchmark evidence and explicit unsupported-claim boundaries.
+- Added benchmark manifest `data_source` metadata.
+
+### Changed
+
+- Promoted `cwt` from LEVEL 0 smoke validation to LEVEL 1 invariant validation
+  with tests for finite normalised output, zero-signal energy and scale
+  validation.
+- Clarified the supported package surface and evidence boundaries in
+  `docs/scope.md`, `docs/encoder_validation.md`, `results/README.md` and the
+  roadmap.
+- Improved benchmark execution with resumable/incremental CSV output and
+  `--n-jobs` parallelism.
+
+### Fixed
+
+- Fixed `fractal_dimension` so degenerate box counts do not produce NaN feature
+  values.
+- Fixed version drift checks for `.zenodo.json` and `CITATION.cff`.
+- Hardened release metadata, SciPy compatibility pins and benchmark manifest
+  reproducibility details.
+
 ## [0.3.0] - 2026-08-13
 
 Representation expansion release. This release adds validated time-frequency,

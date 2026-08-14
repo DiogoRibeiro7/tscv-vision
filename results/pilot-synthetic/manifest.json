@@ -13,8 +13,8 @@
     "numba": "0.67.0",
     "scikit-image": "not installed"
   },
-  "git_commit": "c3c63938ccc2437a9c80f60bd91817cab964442f",
-  "git_dirty": true,
+  "git_commit": "1f23f47fd8736c542525906455fdae93e089a1e4",
+  "git_dirty": false,
   "methods": [
     {
       "name": "baseline-1nn-euclidean",

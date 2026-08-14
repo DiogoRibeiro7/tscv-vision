@@ -313,6 +313,7 @@ names keep working until 0.3.0 and emit `DeprecationWarning`. See the
 - [API reference](docs/api.md)
 - [Encoder validation matrix](docs/encoder_validation.md)
 - [Benchmarks](docs/benchmarks.md)
+- [Paper draft](docs/paper.md)
 - [Deployment guide](docs/deployment.md)
 - [Performance guide](docs/performance.md)
 - [Release checklist](docs/release-checklist.md)

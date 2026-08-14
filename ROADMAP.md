@@ -189,6 +189,8 @@ rather than lowering it: 29 encoders with no benchmark is a larger gap than
       hardware recorded in the manifest
 - [ ] Robustness sweeps: additive noise, missingness under each `nan_policy`,
       irregular lengths
+- [x] Draft a software-paper scaffold grounded in the committed evidence run,
+      with explicit unsupported-claim boundaries
 
 ### Remaining validation gaps
 
